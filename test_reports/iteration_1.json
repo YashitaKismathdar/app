@@ -1,0 +1,36 @@
+{
+  "summary": "First-run full-stack test of WavyGo OS Part 1. Backend: 19/19 pytest tests passed (100%) covering auth (login, wrong password, refresh, me, invalid token), role guards (Founder/Admin/Manager/Employee/Intern on /api/users), public /api/dashboard/live-kpis, authed /api/dashboard/stats (5 KPIs), notifications, activity, settings and full profile-update + password change roundtrip (restored to Wavygo@2026). Frontend: verified via Playwright — login split-screen renders with WavyGo branding, CIN U77100BR2025PTC077095 in footer, wrong-password shows login-error-message and stays on /login, founder login redirects to /dashboard, all 17 sidebar items appear in the EXACT frozen order with correct data-testid nav-<key>, founder-dashboard renders all 5 KPI cards (revenue/bookings/customers/vehicles/vendors) plus revenue-chart, bookings-chart, city-performance-table, todays-tasks-list, upcoming-events-list, quick-actions, recent-activity-feed, opportunity-summary, app-greeting visible, notification-bell shows unread badge (5) and opens notification-drawer, theme-toggle switches html.dark class light↔dark and persists in wavygo_theme localStorage, global search (Cmd/Ctrl+K trigger) opens cmdk palette, typing 'Finance' lists a Finance item and Enter navigates to /finance, sidebar-toggle collapses sidebar (264px → 72px), user-menu-trigger opens dropdown with logout-button which signs out and redirects to /login.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (post-login)", "issues": ["Post-login 'Welcome back to WavyGo OS' toast is rendered at top-right and overlays theme-toggle, notification-bell and user-menu-trigger for ~3s. Clicks that arrive during the toast animation are intercepted and produce a poor UX (this is what initially made theme toggle/notification drawer appear broken in automation). Recommend either lowering toast z-index, placing it in bottom-right, or making it non-interactive (pointer-events: none)."]},
+      {"screen": "Dashboard charts", "issues": ["Recharts console warnings: 'The width(-1) and height(-1) of chart should be greater than 0' — chart ResponsiveContainer briefly has zero size on first paint. Cosmetic but noisy; add explicit minHeight or aspect."]},
+      {"screen": "Global Search command palette", "issues": ["Radix DialogContent used by cmdk palette is missing DialogTitle / aria-describedby (a11y console errors). Wrap title in VisuallyHidden or add DialogTitle."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix welcome toast overlaying top-nav icons (z-index or reposition).",
+    "Add DialogTitle to Radix DialogContent used by global search / notification drawer to remove a11y warnings.",
+    "Set explicit min-height / aspect on Recharts ResponsiveContainer to remove width(-1)/height(-1) warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py: startup uses deprecated @app.on_event('startup'/'shutdown'). Migrate to lifespan context in a future iteration.",
+    "CORS_ORIGINS defaults to '*' with allow_credentials=True — browsers ignore credentials with wildcard; set explicit origin list for prod.",
+    "auth_router.login logs 'Signed in' unconditionally — consider rate-limiting login and locking after N failures (brute force protection mentioned in playbook not implemented).",
+    "Notifications unread-count returns 200 but shape is not asserted to match frontend expectation ('count' vs 'unread'). Both codepaths tolerated in test — align contract.",
+    "ObjectId handling in users_router looks correct (excludes password_hash, converts _id to str)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "All 5 seed accounts work (Founder/Admin/Manager/Employee/Intern @ Wavygo@2026). Password change roundtrip restored Employee password to Wavygo@2026.",
+  "seed_data_creation": "None additional. Relied on startup seed_all which is idempotent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite lives at /app/backend/tests/backend_test.py (19 tests, ~9s). All frozen sidebar keys and dashboard testids match the spec. Only cosmetic issues remain: (1) post-login toast overlays top-nav icons briefly, (2) Recharts width warnings, (3) DialogContent a11y warnings. If automating clicks on notification-bell/theme-toggle/user-menu, WAIT ~3.5s after /dashboard load for the welcome toast to dismiss, otherwise the toast will intercept the click."
+}

@@ -1,0 +1,187 @@
+{
+  "project": "WavyGo OS",
+  "company": "WAVYGO MOBILITY SERVICES PRIVATE LIMITED",
+  "cin": "U77100BR2025PTC077095",
+  "roles": [
+    "Founder",
+    "Admin",
+    "Manager",
+    "Employee",
+    "Intern"
+  ],
+  "theme": {
+    "mode": "Light + Dark mode support with toggle",
+    "philosophy": "Apple + Linear + Stripe Dashboard + Notion + Vercel aesthetic. Premium, minimal, modern, elegant, fast, clean, beautiful. No outdated ERP aesthetics."
+  },
+  "colors": {
+    "light": {
+      "primary": "#0F8D52",
+      "sidebar": "#084C2C",
+      "background": "#F7F9FC",
+      "surface": "#FFFFFF",
+      "textPrimary": "#1B1F23",
+      "textSecondary": "#667085",
+      "success": "#16A34A",
+      "warning": "#F59E0B",
+      "error": "#DC2626",
+      "info": "#2563EB",
+      "border": "#E5E7EB"
+    },
+    "dark": {
+      "primary": "#0F8D52",
+      "sidebar": "#0B0F14",
+      "background": "#0B0F14",
+      "surface": "#111827",
+      "textPrimary": "#F9FAFB",
+      "textSecondary": "#9CA3AF",
+      "success": "#16A34A",
+      "warning": "#F59E0B",
+      "error": "#DC2626",
+      "info": "#2563EB",
+      "border": "#1F2937"
+    }
+  },
+  "typography": {
+    "headings": "Space Grotesk (tracking-tight or tracking-tighter for impact)",
+    "body": "Inter (leading-relaxed for legibility)",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tighter",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base font-normal",
+      "small_labels": "text-sm font-medium tracking-[0.02em] uppercase"
+    }
+  },
+  "layouts": {
+    "login_split_screen": {
+      "left_panel": {
+        "width": "50% (hidden on small screens)",
+        "content": "Large mobility hero image/looping video. Floating live KPI cards (Today's Bookings, Active Vendors, Vehicles Online, Cities, Revenue) with smooth spring floating animations.",
+        "branding": "WavyGo subtle overlay"
+      },
+      "right_panel": {
+        "width": "50% (100% on small screens)",
+        "content": "Official WavyGo logo (Green on light mode, White on dark mode), 'Welcome to WavyGo OS', Login Form (Email, Password, Forgot Password, Remember Me, Sign In button).",
+        "footer": "WAVYGO MOBILITY SERVICES PRIVATE LIMITED | CIN: U77100BR2025PTC077095"
+      }
+    },
+    "app_shell": {
+      "sidebar": {
+        "behavior": "Collapsible, persistent",
+        "items_fixed_order": [
+          "Dashboard",
+          "Marketplace",
+          "Task Board",
+          "Opportunity Hub",
+          "Employees",
+          "WavyGo Connect",
+          "Company Vault",
+          "Finance",
+          "CRM",
+          "Marketing",
+          "Analytics",
+          "Calendar",
+          "WavyGo AI",
+          "About WavyGo",
+          "Activity Logs",
+          "Notifications",
+          "Settings"
+        ],
+        "bottom_element": "Dynamic user profile (photo, name, role, online status)"
+      },
+      "top_nav": {
+        "elements": [
+          "Global Search",
+          "Quick Create",
+          "Notifications",
+          "Theme Toggle",
+          "Time-based greeting ('Good Morning, {First Name}')"
+        ],
+        "style": "Glassmorphism (backdrop-blur-xl), border-b 1px subtle."
+      }
+    },
+    "founder_dashboard": {
+      "grid_style": "High Density Bento Grid (grid-cols-1 md:grid-cols-3 lg:grid-cols-4) with gap-4 or gap-6. No jagged bottoms.",
+      "kpi_cards": "Revenue, Bookings, Customers, Vehicles, Vendors",
+      "charts": "Revenue chart, Booking chart, City Performance",
+      "widgets": "Today's Tasks, Upcoming Calendar, Quick Actions, Recent Activity, Opportunity Summary"
+    }
+  },
+  "components": {
+    "buttons": "Modern, crisp edges or pill-shaped. Interaction animations (scale 0.98 active state). Primary color ONLY for primary actions.",
+    "cards": "Go flat, rectangular, dense styles. 1px subtle border, flat background. Hover: slight lift (-translate-y-1) and shadow-lg.",
+    "inputs": "Shadcn-based, minimalist. Focus rings must be high-contrast and use brand primary color.",
+    "dropdowns": "Solid background (NO transparent backgrounds). 1px border, subtle ambient shadow.",
+    "badges": "Subtle tint backgrounds (e.g., bg-green-100 text-green-800 for light mode).",
+    "tables": "Dense, crisp lines. Hover state on rows. No zebra striping, use 1px bottom border per row.",
+    "charts": "Shadcn/Recharts. Clean lines, minimal axes, glassmorphic tooltips.",
+    "toasts": "Use Sonner. Crisp edges, minimalist icons."
+  },
+  "motion": {
+    "principles": "Subtle, fast, professional. Never flashy.",
+    "transitions": "Use specific properties (e.g., transition: transform 0.2s ease). NEVER use 'transition: all'.",
+    "hover_states": "Every interactive element needs a micro-animation."
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Use sparingly on sticky headers/navs: backdrop-blur-xl with high opacity bg (e.g., bg-white/80 or bg-black/60) + 1px inner stroke.",
+    "neumorphism": "Avoid heavy shadows. Use 1px borders to define shapes.",
+    "icons": "Use 'lucide-react' for all standard icons. Crisp and consistent stroke widths."
+  },
+  "accessibility": {
+    "contrast": "Ensure minimum 4.5:1 text contrast. Do not use dark-on-dark text.",
+    "testing_attributes": "All interactive/key elements MUST include 'data-testid' in kebab-case (e.g., data-testid='login-submit-button').",
+    "focus": "Clear focus states on all inputs and buttons."
+  },
+  "media": {
+    "logo_rules": "Use OFFICIAL green WavyGo logo (uploaded PDF) on light mode. OFFICIAL white WavyGo logo on dark mode. Never generate AI logo, never redesign, modify colors, or stretch.",
+    "login_hero_images": [
+      {
+        "url": "https://images.pexels.com/photos/29092195/pexels-photo-29092195.jpeg",
+        "description": "Mumbai scooter traffic - Urban Indian mobility context",
+        "category": "Hero Background"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1695834195972-9fd5877b8ad0",
+        "description": "Busy city street with motorcycles",
+        "category": "Hero Background"
+      },
+      {
+        "url": "https://images.pexels.com/photos/8936927/pexels-photo-8936927.jpeg",
+        "description": "Sleek electric bike in urban area at night",
+        "category": "Hero Background Alternative"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1620802051782-725fa33db067",
+        "description": "Riding white e-bike - Active mobility",
+        "category": "Hero Background Alternative"
+      }
+    ]
+  },
+  "explicit_avoid_list": [
+    "No purple/violet gradients.",
+    "No SAP/Oracle/Zoho/old ERP looks.",
+    "No dark-on-dark text or poor contrast elements.",
+    "No generic centered layouts.",
+    "No simplistic gradients.",
+    "No universal 'transition: all' properties.",
+    "No AI assistant emojis.",
+    "No transparent backgrounds for dropdowns, headers, or overlays where content overlaps.",
+    "Never rename or reorder the sidebar items."
+  ],
+  "instructions_to_main_agent": [
+    "Prioritize Shadcn UI components but heavily customize them to match the Apple/Linear/Stripe aesthetic.",
+    "Execute purely in React (.js) using Tailwind CSS.",
+    "Implement the full App Shell logic with React Context or standard state for sidebar toggling and theme switching.",
+    "The Founder Dashboard must use CSS Grid seamlessly to prevent jagged edges.",
+    "For the login split screen, animate the floating KPI cards using Framer Motion.",
+    "Apply `data-testid` to all interactive components."
+  ],
+  "universal_guidelines_for_main_agent": [
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Left-align text by default. Center alignment should only be used intentionally for visual hierarchy.",
+    "Ensure all buttons have hover, active, and focus states explicitly defined.",
+    "Missing images must use the provided Unsplash URLs; never use placeholder text or dummy image services."
+  ]
+}

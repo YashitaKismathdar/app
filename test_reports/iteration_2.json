@@ -1,0 +1,35 @@
+{
+  "summary": "WavyGo OS Part 2 full-stack test — 100% pass on backend (31/31 pytest) and frontend (all 5 new module pages + enhanced dashboard). Backend: verified enhanced /api/dashboard/stats returns exactly 9 KPIs with the expected keys (revenue, revenue_today, revenue_week, bookings, bookings_today, active_bookings, customers, vehicles, vendors) plus vendor_perf, company_health {score,signals,flags}, system_status with 5 services, and recent_notifications. Marketplace: /dashboard, /analytics, list endpoints (cities/vendors/vehicles/customers/pricing/coupons/reviews/bookings/kyc/support) all 200; >=5 seeded vendors, >=30 seeded bookings. Created vendor via POST → persisted and appears in GET list; KYC PATCH approved cascaded vendor.kyc_status='approved'; booking status transitions pending→confirmed→active→completed all worked. Tasks: /stats/overview returns all 6 columns; created task via POST appears under status filter; PATCH /status transitions; POST /comments persists and enriches; assignee (employee) received 'assigned' notification via GET /api/notifications. Employees: /stats, /, /departments/list, /attendance/records, /leave/requests, /performance/reviews all 200; Intern invite → 403 as required; Founder invite → 201 with temp_password='Wavygo@2026' and new user can log in. Leave workflow: employee POSTs leave, founder PATCH approves → employee gets 'Your leave was approved' notification. Opportunities: /stats, POST create, POST /assign work; assignee notified. Connect: 5 seeded channels visible (announcements/general/operations/product/founders); GET/POST messages on general work; POST /dm/{peer_id} idempotently returns/creates a DM channel of kind=dm. Activity trail correctly logs Task Board entries after task creation. Part 1 regression (login, live-kpis, settings/company, /activity, /notifications) still 100%. Frontend UI (Playwright as Founder): login → /dashboard; dashboard renders founder-dashboard + vendor-performance + company-health + system-status + recent-notifications testids. Marketplace page loads with all 12 mp-tab-* triggers (dashboard/bookings/customers/vendors/vehicles/cities/pricing/coupons/kyc/support/reviews/analytics). Task Board renders taskboard-page + all 5 kanban-column-* (todo, in_progress, review, completed, cancelled); creating a task through task-create-btn/task-title-input/task-submit-btn appended it to UI. Employees, Opportunity Hub, Connect pages all mount their root testids. Connect: sending 'UI ping from pytest' via connect-message-input/connect-send-btn appended into #general chat (visible in final screenshot). Sidebar renders all 17 items inside AppShell across every page.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard charts", "issues": ["Recharts still logs 'The width(-1) and height(-1) of chart should be greater than 0' warnings on initial paint — same cosmetic issue flagged in iteration_1; add explicit minHeight/aspect on ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_part2_test.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/part2_results.xml"
+  ],
+  "action_items": [
+    "Cosmetic only: set explicit min-height on Recharts ResponsiveContainer on Dashboard to silence width(-1)/height(-1) warnings.",
+    "(Carried from iteration_1) Welcome toast still overlays top-nav briefly after login; reposition or make pointer-events:none."
+  ],
+  "critical_code_review_comments": [
+    "marketplace_router._crud PATCH endpoint accepts a raw dict — no schema validation on update payload; a malformed body could set unexpected fields (e.g., 'active':'yes'). Consider a partial Pydantic update model.",
+    "tasks_router.delete_task and opportunities_router.delete_opp are gated only by get_current_user — any authenticated user (including Intern) can delete any task/opportunity. Add require_roles for destructive ops.",
+    "connect_router.list_channels visibility: OR of (kind∈channel/announcement) OR (members contains me) means any authenticated user can see ALL public channels including 'founders' (kind=group but currently seeded as channel?). Verify seeded 'founders' has proper kind so it's restricted.",
+    "dashboard_router.stats aggregates like $regex on created_at is not indexable; on real volume this will be slow. Consider storing created_at as BSON Date.",
+    "employees_router.invite: default password 'Wavygo@2026' is returned in response — fine for MVP, but for prod, generate a random temp password and force reset on first login.",
+    "CORS_ORIGINS still '*' with allow_credentials — same finding from iteration_1, remains unaddressed."
+  ],
+  "updated_files": ["/app/backend/tests/backend_part2_test.py"],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "100% (all Part 2 module pages + dashboard widgets verified)"},
+  "test_credentials": "All 5 seed accounts remain valid at Wavygo@2026. One additional test user was invited during testing (test_<uuid>@wavygo.in / Wavygo@2026) — safe residual, seed is idempotent so no cleanup needed.",
+  "seed_data_creation": "Created via API during tests: 1 TEST_Vendor, several TEST_ tasks, 1 TEST_ opportunity, 1 leave request for employee (approved), 1 test invite user, several chat messages in #general. Bookings transitioned through statuses (idempotent under seed re-run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: run `pytest /app/backend/tests/ -v` (Part 1 backend_test.py = 19 tests, Part 2 backend_part2_test.py = 31 tests, ~13s total, all pass). All Part 2 module pages have data-testid=<module>-page. Marketplace tabs use mp-tab-<key> for 12 tabs. Task Board columns use kanban-column-<status>. Employee invite temp_password is hardcoded to 'Wavygo@2026'. Notifications DO propagate on task assignment, opportunity assignment, and leave approval. WavyGo Connect uses 5s polling on the frontend; when sending messages via UI, wait ~1.2s before asserting DOM. If you re-run tests, note that the sidebar has 17 items but their nav-<key> testids follow the frozen Part 1 scheme (dashboard, marketplace, task-board, opportunity-hub, employees, wavygo-connect, company-vault, finance, crm, marketing, analytics, calendar, wavygo-ai, about-wavygo, activity-logs, notifications, settings) — NOT the placeholder names used in the spec sentence."
+}
