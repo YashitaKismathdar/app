@@ -1,8 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { WavygoLogo } from "@/components/WavygoLogo";
+import { canViewModule } from "@/constants/permissions";
+import Forbidden from "@/pages/Forbidden";
 
-export function ProtectedRoute({ children }) {
+export function ProtectedRoute({ children, allowedModule }) {
   const { user, loading } = useAuth();
   const loc = useLocation();
 
@@ -17,6 +19,7 @@ export function ProtectedRoute({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
+  if (allowedModule && !canViewModule(user.role, allowedModule)) return <Forbidden />;
   return children;
 }
 

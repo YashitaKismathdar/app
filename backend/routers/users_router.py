@@ -39,6 +39,8 @@ async def update_me(payload: UpdateProfileRequest, current: UserPublic = Depends
 
 @router.post("/me/password")
 async def change_password(payload: ChangePasswordRequest, current: UserPublic = Depends(get_current_user)):
+    if current.role not in ("Founder", "Admin", "Manager"):
+        raise HTTPException(status_code=403, detail="Password change is not available for your role")
     db = get_db()
     doc = await db.users.find_one({"_id": ObjectId(current.id)})
     if not verify_password(payload.current_password, doc.get("password_hash", "")):

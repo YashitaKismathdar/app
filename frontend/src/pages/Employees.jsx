@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { toast } from "sonner";
 
 function initials(name) {
@@ -20,11 +22,15 @@ function initials(name) {
 }
 
 function Directory() {
+  const { can } = usePermission();
+  const canInvite = can("employee.invite");
+  const canReset = can("auth.reset_other_password");
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
   const [tempPw, setTempPw] = useState(null);
+  const [resetInfo, setResetInfo] = useState(null);
 
   async function load() {
     const { data } = await api.get("/employees");
@@ -48,11 +54,19 @@ function Directory() {
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
+  async function resetPassword(u) {
+    try {
+      const { data } = await api.post(`/employees/${u.id}/reset-password`);
+      setResetInfo({ email: u.email, password: data.temp_password });
+      toast.success("Password reset");
+    } catch (e) { toast.error(formatApiError(e)); }
+  }
+
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-4">
         <Input placeholder="Search by name, email, role, department…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" data-testid="employee-search" />
-        <Button onClick={() => setOpen(true)} data-testid="employee-invite-btn"><UserPlus className="h-4 w-4 mr-1.5" /> Invite teammate</Button>
+        {canInvite && <Button onClick={() => setOpen(true)} data-testid="employee-invite-btn"><UserPlus className="h-4 w-4 mr-1.5" /> Invite teammate</Button>}
       </div>
 
       <Card className="border-border">
@@ -66,6 +80,7 @@ function Directory() {
                 <TableHead>Department</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
+                {canReset && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -82,6 +97,15 @@ function Directory() {
                   <TableCell className="text-[13px]">{u.department || "—"}</TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">{u.phone || "—"}</TableCell>
                   <TableCell><StatusPill status={u.online ? "active" : "paused"} /></TableCell>
+                  {canReset && (
+                    <TableCell className="text-right">
+                      {u.role !== "Founder" && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetPassword(u)} data-testid={`reset-password-btn-${u.id}`}>
+                          <KeyRound className="h-3.5 w-3.5 mr-1" /> Reset password
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -103,7 +127,7 @@ function Directory() {
                 <Label>Role</Label>
                 <Select value={form.role} onValueChange={(v) => setForm(s => ({ ...s, role: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["Founder","Admin","Manager","Employee","Intern"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                  <SelectContent>{["Admin","Manager","Employee","Intern"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm(s => ({ ...s, phone: e.target.value }))} /></div>
@@ -124,25 +148,44 @@ function Directory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!resetInfo} onOpenChange={(v) => !v && setResetInfo(null)}>
+        <DialogContent data-testid="reset-password-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Password reset</DialogTitle>
+            <DialogDescription>Share this temporary password securely. It is shown only once.</DialogDescription>
+          </DialogHeader>
+          {resetInfo && (
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-[12.5px]">
+              Temporary password for <span className="font-medium">{resetInfo.email}</span>: <span className="font-mono font-semibold" data-testid="reset-temp-password">{resetInfo.password}</span>
+            </div>
+          )}
+          <DialogFooter><Button onClick={() => setResetInfo(null)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
 
 function Attendance() {
+  const { user } = useAuth();
+  const { can } = usePermission();
+  const canDir = can("employee.view_directory");
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: "", date: new Date().toISOString().slice(0, 10), status: "present" });
 
+  useEffect(() => { if (!canDir && user) setForm(s => ({ ...s, employee_id: user.id })); }, [canDir, user]);
+
   async function load() {
-    const [{ data: att }, { data: emps }] = await Promise.all([
-      api.get("/employees/attendance/records"),
-      api.get("/employees"),
-    ]);
-    // enrich names
-    const nameMap = Object.fromEntries(emps.map(e => [e.id, e.name]));
-    setRows(att.map(a => ({ ...a, employee_name: nameMap[a.employee_id] || "—" })));
-    setUsers(emps);
+    const empReq = canDir ? api.get("/employees") : Promise.resolve({ data: [] });
+    const [{ data: att }, { data: emps }] = await Promise.all([api.get("/employees/attendance/records"), empReq]);
+    const list = canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []);
+    const nameMap = Object.fromEntries(list.map(e => [e.id, e.name]));
+    if (user) nameMap[user.id] = user.name;
+    setRows(att.map(a => ({ ...a, employee_name: nameMap[a.employee_id] || (user ? user.name : "—") })));
+    setUsers(list);
   }
   useEffect(() => { load(); }, []);
 
@@ -178,8 +221,8 @@ function Attendance() {
           <div className="space-y-3">
             <div>
               <Label>Employee</Label>
-              <Select value={form.employee_id} onValueChange={(v) => setForm(s => ({ ...s, employee_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+              <Select value={form.employee_id} onValueChange={(v) => setForm(s => ({ ...s, employee_id: v }))} disabled={!canDir}>
+                <SelectTrigger><SelectValue placeholder={canDir ? "Select employee" : (user?.name || "You")} /></SelectTrigger>
                 <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -202,14 +245,21 @@ function Attendance() {
 }
 
 function Leave() {
+  const { user } = useAuth();
+  const { can } = usePermission();
+  const canDir = can("employee.view_directory");
+  const canApprove = can("leave.approve");
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: "", from_date: "", to_date: "", kind: "casual", reason: "", status: "pending" });
 
+  useEffect(() => { if (!canDir && user) setForm(s => ({ ...s, employee_id: user.id })); }, [canDir, user]);
+
   async function load() {
-    const [{ data: lv }, { data: emps }] = await Promise.all([api.get("/employees/leave/requests"), api.get("/employees")]);
-    setRows(lv); setUsers(emps);
+    const empReq = canDir ? api.get("/employees") : Promise.resolve({ data: [] });
+    const [{ data: lv }, { data: emps }] = await Promise.all([api.get("/employees/leave/requests"), empReq]);
+    setRows(lv); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/leave/requests", form); toast.success("Leave requested"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
@@ -230,7 +280,7 @@ function Leave() {
                 <TableCell className="text-[13px] text-muted-foreground line-clamp-1">{r.reason}</TableCell>
                 <TableCell><StatusPill status={r.status} /></TableCell>
                 <TableCell className="text-right space-x-1">
-                  {r.status === "pending" && <>
+                  {canApprove && r.status === "pending" && <>
                     <Button size="sm" variant="outline" className="h-7 text-xs text-success border-success/40" onClick={() => decide(r.id, "approved")}>Approve</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/40" onClick={() => decide(r.id, "rejected")}>Reject</Button>
                   </>}
@@ -246,7 +296,7 @@ function Leave() {
           <div className="space-y-3">
             <div>
               <Label>Employee</Label>
-              <Select value={form.employee_id} onValueChange={(v) => setForm(s => ({ ...s, employee_id: v }))}><SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+              <Select value={form.employee_id} onValueChange={(v) => setForm(s => ({ ...s, employee_id: v }))} disabled={!canDir}><SelectTrigger><SelectValue placeholder={canDir ? "Select employee" : (user?.name || "You")} /></SelectTrigger>
                 <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -270,21 +320,26 @@ function Leave() {
 }
 
 function Performance() {
+  const { user } = useAuth();
+  const { can } = usePermission();
+  const canDir = can("employee.view_directory");
+  const canReview = can("performance.create");
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: "", period: "Q1-2026", score: 4.0, highlights: "", growth_areas: "" });
 
   async function load() {
-    const [{ data: pr }, { data: emps }] = await Promise.all([api.get("/employees/performance/reviews"), api.get("/employees")]);
-    setRows(pr); setUsers(emps);
+    const empReq = canDir ? api.get("/employees") : Promise.resolve({ data: [] });
+    const [{ data: pr }, { data: emps }] = await Promise.all([api.get("/employees/performance/reviews"), empReq]);
+    setRows(pr); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/performance/reviews", form); toast.success("Review saved"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
 
   return (
     <>
-      <div className="flex justify-end mb-4"><Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Log review</Button></div>
+      {canReview && <div className="flex justify-end mb-4"><Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Log review</Button></div>}
       <Card className="border-border">
         {rows.length === 0 ? <EmptyState icon={Award} title="No reviews yet" /> : (
           <div className="divide-y divide-border">
@@ -331,6 +386,8 @@ function Performance() {
 }
 
 function Departments() {
+  const { can } = usePermission();
+  const canCreate = can("department.create");
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
@@ -339,7 +396,7 @@ function Departments() {
   async function submit() { try { await api.post("/employees/departments/list", form); toast.success("Department created"); setOpen(false); setForm({ name: "", description: "" }); load(); } catch (e) { toast.error(formatApiError(e)); } }
   return (
     <>
-      <div className="flex justify-end mb-4"><Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> New department</Button></div>
+      {canCreate && <div className="flex justify-end mb-4"><Button onClick={() => setOpen(true)} data-testid="department-create-btn"><Plus className="h-4 w-4 mr-1.5" /> New department</Button></div>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {rows.map(d => (
           <Card key={d.id} className="border-border hover-lift">
@@ -371,11 +428,22 @@ function Departments() {
 }
 
 export default function Employees() {
+  const { can, role } = usePermission();
+  const canDir = can("employee.view_directory");
+  const canDepts = role === "Founder" || role === "Admin" || role === "Manager";
+  const showPerformance = role !== "Intern";
+  const personal = role === "Employee" || role === "Intern";
   const [stats, setStats] = useState(null);
   useEffect(() => { api.get("/employees/stats/overview").then(({ data }) => setStats(data)); }, []);
   return (
     <div data-testid="employees-page">
-      <PageHeader eyebrow="Module" title="Employees" description="Directory, attendance, leave, performance and departments — the human core of WavyGo." />
+      <PageHeader
+        eyebrow={personal ? "Personal" : "Module"}
+        title={personal ? "My Workspace" : "Employees"}
+        description={personal
+          ? "Your attendance, leave and performance in one place."
+          : "Directory, attendance, leave, performance and departments — the human core of WavyGo."}
+      />
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <StatCard label="Total teammates" value={stats.total} icon={Users} />
@@ -384,19 +452,19 @@ export default function Employees() {
           <StatCard label="Pending leave" value={stats.pending_leave} icon={CalendarDays} tone="warning" />
         </div>
       )}
-      <Tabs defaultValue="directory">
+      <Tabs defaultValue={canDir ? "directory" : "attendance"}>
         <TabsList>
-          <TabsTrigger value="directory" data-testid="emp-tab-directory">Directory</TabsTrigger>
+          {canDir && <TabsTrigger value="directory" data-testid="emp-tab-directory">Directory</TabsTrigger>}
           <TabsTrigger value="attendance" data-testid="emp-tab-attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leave" data-testid="emp-tab-leave">Leave</TabsTrigger>
-          <TabsTrigger value="performance" data-testid="emp-tab-performance">Performance</TabsTrigger>
-          <TabsTrigger value="departments" data-testid="emp-tab-departments">Departments</TabsTrigger>
+          {showPerformance && <TabsTrigger value="performance" data-testid="emp-tab-performance">Performance</TabsTrigger>}
+          {canDepts && <TabsTrigger value="departments" data-testid="emp-tab-departments">Departments</TabsTrigger>}
         </TabsList>
-        <TabsContent value="directory" className="mt-6"><Directory /></TabsContent>
+        {canDir && <TabsContent value="directory" className="mt-6"><Directory /></TabsContent>}
         <TabsContent value="attendance" className="mt-6"><Attendance /></TabsContent>
         <TabsContent value="leave" className="mt-6"><Leave /></TabsContent>
-        <TabsContent value="performance" className="mt-6"><Performance /></TabsContent>
-        <TabsContent value="departments" className="mt-6"><Departments /></TabsContent>
+        {showPerformance && <TabsContent value="performance" className="mt-6"><Performance /></TabsContent>}
+        {canDepts && <TabsContent value="departments" className="mt-6"><Departments /></TabsContent>}
       </Tabs>
     </div>
   );

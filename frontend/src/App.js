@@ -23,9 +23,9 @@ const PLACEHOLDER_ROUTES = [
   "/marketing", "/analytics", "/calendar", "/wavygo-ai",
 ];
 
-function Shell({ children }) {
+function Shell({ children, module }) {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedModule={module}>
       <AppShell>{children}</AppShell>
     </ProtectedRoute>
   );
@@ -39,18 +39,18 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/dashboard"      element={<Shell><Dashboard /></Shell>} />
-            <Route path="/marketplace"    element={<Shell><Marketplace /></Shell>} />
-            <Route path="/task-board"     element={<Shell><TaskBoard /></Shell>} />
-            <Route path="/employees"      element={<Shell><Employees /></Shell>} />
-            <Route path="/opportunity-hub" element={<Shell><OpportunityHub /></Shell>} />
-            <Route path="/wavygo-connect" element={<Shell><WavygoConnect /></Shell>} />
-            <Route path="/settings"       element={<Shell><Settings /></Shell>} />
-            <Route path="/notifications"  element={<Shell><NotificationsPage /></Shell>} />
-            <Route path="/activity-logs"  element={<Shell><ActivityLogs /></Shell>} />
-            <Route path="/about-wavygo"   element={<Shell><AboutWavygo /></Shell>} />
+            <Route path="/dashboard"       element={<Shell module="dashboard"><Dashboard /></Shell>} />
+            <Route path="/marketplace"     element={<Shell module="marketplace"><Marketplace /></Shell>} />
+            <Route path="/task-board"      element={<Shell module="task-board"><TaskBoard /></Shell>} />
+            <Route path="/employees"       element={<Shell module="employees"><Employees /></Shell>} />
+            <Route path="/opportunity-hub" element={<Shell module="opportunity-hub"><OpportunityHub /></Shell>} />
+            <Route path="/wavygo-connect"  element={<Shell module="wavygo-connect"><WavygoConnect /></Shell>} />
+            <Route path="/settings"        element={<Shell module="settings"><Settings /></Shell>} />
+            <Route path="/notifications"   element={<Shell module="notifications"><NotificationsPage /></Shell>} />
+            <Route path="/activity-logs"   element={<Shell module="activity-logs"><ActivityLogs /></Shell>} />
+            <Route path="/about-wavygo"    element={<Shell module="about-wavygo"><AboutWavygo /></Shell>} />
             {PLACEHOLDER_ROUTES.map((p) => (
-              <Route key={p} path={p} element={<Shell><ModulePlaceholder /></Shell>} />
+              <Route key={p} path={p} element={<Shell module={p.slice(1)}><ModulePlaceholder /></Shell>} />
             ))}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

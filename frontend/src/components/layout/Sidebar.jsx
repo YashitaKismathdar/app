@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, Circle } from "lucide-react";
-import { NAV_ITEMS } from "@/constants/nav";
+import { visibleNavFor } from "@/constants/nav";
 import { SHELL, SIDEBAR_NAV } from "@/constants/testIds";
 import { WavygoLogo } from "@/components/WavygoLogo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,7 +42,7 @@ export function Sidebar({ collapsed, onToggle }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-3 px-2">
           <ul className="space-y-0.5">
-            {NAV_ITEMS.map((item) => {
+            {visibleNavFor(user?.role).map((item) => {
               const Icon = item.icon;
               const link = (
                 <NavLink

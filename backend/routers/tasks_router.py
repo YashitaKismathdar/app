@@ -9,6 +9,12 @@ from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, not
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+async def _dept_ids(db, department):
+    if not department:
+        return []
+    return [str(u["_id"]) async for u in db.users.find({"department": department}, {"_id": 1})]
+
+
 @router.get("")
 async def list_tasks(status: str | None = None, assignee_id: str | None = None,
                      module: str | None = None, limit: int = Query(200, ge=1, le=500),
@@ -18,12 +24,24 @@ async def list_tasks(status: str | None = None, assignee_id: str | None = None,
     if status: q["status"] = status
     if assignee_id: q["assignee_id"] = assignee_id
     if module: q["module"] = module
+
+    role_filter = None
+    if current.role == "Manager":
+        ids = await _dept_ids(db, current.department)
+        role_filter = {"$or": [{"assignee_id": {"$in": ids}}, {"reporter_id": {"$in": ids}}]}
+    elif current.role == "Employee":
+        role_filter = {"$or": [{"assignee_id": current.id}, {"reporter_id": current.id}]}
+    elif current.role == "Intern":
+        role_filter = {"assignee_id": current.id}
+
+    if role_filter:
+        q = {"$and": [q, role_filter]} if q else role_filter
+
     docs = await db.tasks.find(q).sort("created_at", -1).to_list(limit)
     return serialize_many(docs)
 
 
 async def _enrich_names(db, doc):
-    """Attach assignee_name and reporter_name."""
     for src, dst in (("assignee_id", "assignee_name"), ("reporter_id", "reporter_name")):
         uid = doc.get(src)
         if uid:
@@ -42,6 +60,8 @@ async def _enrich_names(db, doc):
 @router.post("", status_code=201)
 async def create_task(payload: TaskIn, current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns cannot create tasks")
     doc = payload.model_dump()
     doc.setdefault("reporter_id", current.id)
     doc["subtasks"] = [s if isinstance(s, dict) else s.model_dump() for s in doc.get("subtasks", [])]
@@ -68,9 +88,29 @@ async def get_task(task_id: str, current: UserPublic = Depends(get_current_user)
     return serialize(doc)
 
 
+def _can_touch_task(role, doc, uid):
+    if role in ("Founder", "Admin", "Manager"):
+        return True
+    if role == "Employee":
+        return doc.get("assignee_id") == uid or doc.get("reporter_id") == uid
+    if role == "Intern":
+        return doc.get("assignee_id") == uid
+    return False
+
+
 @router.patch("/{task_id}")
 async def update_task(task_id: str, payload: dict, current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    existing = await db.tasks.find_one({"_id": oid(task_id)})
+    if not existing:
+        raise HTTPException(404, "Not found")
+    if not _can_touch_task(current.role, existing, current.id):
+        raise HTTPException(403, "You cannot edit this task")
+    if current.role == "Intern":
+        # Interns may only change the status of their own assigned tasks.
+        payload = {"status": payload["status"]} if "status" in payload else {}
+        if not payload:
+            raise HTTPException(403, "Interns can only update task status")
     payload.pop("id", None); payload.pop("_id", None); payload.pop("created_at", None); payload.pop("comments", None)
     payload["updated_at"] = utc_iso()
     if "subtasks" in payload:
@@ -90,9 +130,12 @@ async def update_task(task_id: str, payload: dict, current: UserPublic = Depends
 @router.patch("/{task_id}/status")
 async def update_status(task_id: str, payload: TaskStatusPatch, current: UserPublic = Depends(get_current_user)):
     db = get_db()
-    res = await db.tasks.update_one({"_id": oid(task_id)}, {"$set": {"status": payload.status, "updated_at": utc_iso()}})
-    if res.matched_count == 0:
+    existing = await db.tasks.find_one({"_id": oid(task_id)})
+    if not existing:
         raise HTTPException(404, "Not found")
+    if not _can_touch_task(current.role, existing, current.id):
+        raise HTTPException(403, "You cannot update this task")
+    await db.tasks.update_one({"_id": oid(task_id)}, {"$set": {"status": payload.status, "updated_at": utc_iso()}})
     doc = await db.tasks.find_one({"_id": oid(task_id)})
     await log_activity(db, current, f"Task → {payload.status.replace('_', ' ')}", "Task Board", target=doc["title"])
     if doc.get("assignee_id") and payload.status == "completed":
@@ -103,7 +146,7 @@ async def update_status(task_id: str, payload: TaskStatusPatch, current: UserPub
 
 
 @router.delete("/{task_id}")
-async def delete_task(task_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+async def delete_task(task_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
     doc = await db.tasks.find_one({"_id": oid(task_id)})
     if not doc:
@@ -119,6 +162,9 @@ async def add_comment(task_id: str, payload: TaskCommentIn, current: UserPublic 
     doc = await db.tasks.find_one({"_id": oid(task_id)})
     if not doc:
         raise HTTPException(404, "Not found")
+    if current.role not in ("Founder", "Admin", "Manager"):
+        if not (doc.get("assignee_id") == current.id or doc.get("reporter_id") == current.id):
+            raise HTTPException(403, "You can only comment on your own tasks")
     comment = {
         "id": str(ObjectId()),
         "body": payload.body,

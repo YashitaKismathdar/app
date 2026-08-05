@@ -8,12 +8,16 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { usePermission } from "@/hooks/usePermission";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function Settings() {
   const { user, refreshMe } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { can, role } = usePermission();
+  const canChangePassword = can("auth.change_own_password");
+  const isPersonal = role === "Employee" || role === "Intern";
   const [profile, setProfile] = useState({ name: "", phone: "", designation: "", department: "" });
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "" });
   const [company, setCompany] = useState(null);
@@ -51,7 +55,7 @@ export default function Settings() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Settings</div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Workspace preferences</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">{isPersonal ? "My Profile" : "Workspace preferences"}</h1>
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
@@ -113,11 +117,19 @@ export default function Settings() {
 
         <TabsContent value="security" className="mt-4">
           <Card className="border-border">
-            <CardHeader><CardTitle className="font-display">Security</CardTitle><CardDescription>Change your password</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="font-display">Security</CardTitle><CardDescription>{canChangePassword ? "Change your password" : "Password management"}</CardDescription></CardHeader>
             <CardContent className="space-y-4 max-w-md">
-              <div><Label>Current password</Label><Input type="password" className="mt-1.5" value={pwForm.current_password} onChange={(e) => setPwForm(s => ({ ...s, current_password: e.target.value }))} data-testid="current-password-input" /></div>
-              <div><Label>New password</Label><Input type="password" className="mt-1.5" value={pwForm.new_password} onChange={(e) => setPwForm(s => ({ ...s, new_password: e.target.value }))} data-testid="new-password-input" /></div>
-              <Button onClick={changePassword} data-testid="change-password-btn">Update password</Button>
+              {canChangePassword ? (
+                <>
+                  <div><Label>Current password</Label><Input type="password" className="mt-1.5" value={pwForm.current_password} onChange={(e) => setPwForm(s => ({ ...s, current_password: e.target.value }))} data-testid="current-password-input" /></div>
+                  <div><Label>New password</Label><Input type="password" className="mt-1.5" value={pwForm.new_password} onChange={(e) => setPwForm(s => ({ ...s, new_password: e.target.value }))} data-testid="new-password-input" /></div>
+                  <Button onClick={changePassword} data-testid="change-password-btn">Update password</Button>
+                </>
+              ) : (
+                <div className="text-[13.5px] text-muted-foreground leading-relaxed" data-testid="password-managed-note">
+                  Password changes are managed by your Founder/Admin. Please contact them if you need a reset.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 from db import get_db
-from auth_utils import get_current_user
+from auth_utils import get_current_user, require_roles
 from models import UserPublic
 from models_part2 import ChannelIn, MessageIn
 from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, notify
@@ -44,8 +44,11 @@ async def list_channels(kind: str | None = None, current: UserPublic = Depends(g
 
 
 @router.post("/channels", status_code=201)
-async def create_channel(payload: ChannelIn, current: UserPublic = Depends(get_current_user)):
+async def create_channel(payload: ChannelIn,
+                         current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
+    if payload.kind == "announcement" and current.role not in ("Founder", "Admin"):
+        raise HTTPException(403, "Only Founder or Admin can create announcement channels")
     doc = payload.model_dump()
     if current.id not in doc["members"]:
         doc["members"].append(current.id)
@@ -110,6 +113,8 @@ async def send_message(channel_id: str, payload: MessageIn, current: UserPublic 
     ch = await db.channels.find_one({"_id": oid(channel_id)})
     if not ch:
         raise HTTPException(404, "Channel not found")
+    if ch["kind"] == "announcement" and current.role not in ("Founder", "Admin"):
+        raise HTTPException(403, "Only Founder or Admin can post in announcement channels")
     if ch["kind"] in ("dm", "group") and current.id not in ch.get("members", []):
         raise HTTPException(403, "Not a member")
     doc = {

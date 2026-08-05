@@ -8,7 +8,8 @@ from models_part2 import (
 )
 from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, notify
 
-router = APIRouter(prefix="/marketplace", tags=["marketplace"])
+router = APIRouter(prefix="/marketplace", tags=["marketplace"],
+                   dependencies=[Depends(require_roles("Founder"))])
 
 
 def _crud(collection_name: str, model_cls, module_name: str, title_field: str = "name"):

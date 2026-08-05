@@ -1,7 +1,13 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from db import get_db
 from auth_utils import get_current_user
 from models import UserPublic
+
+
+async def _dept_ids(db, department):
+    if not department:
+        return []
+    return [str(u["_id"]) async for u in db.users.find({"department": department}, {"_id": 1})]
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 
@@ -23,11 +29,15 @@ def _serialize(doc):
 async def list_activity(
     limit: int = Query(50, ge=1, le=200),
     module: str | None = None,
-    _: UserPublic = Depends(get_current_user),
+    current: UserPublic = Depends(get_current_user),
 ):
     db = get_db()
+    if current.role in ("Employee", "Intern"):
+        raise HTTPException(status_code=403, detail="Activity logs are not available for your role")
     q = {}
     if module:
         q["module"] = module
+    if current.role == "Manager":
+        q["user_id"] = {"$in": await _dept_ids(db, current.department)}
     docs = await db.activity_logs.find(q).sort("created_at", -1).to_list(limit)
     return [_serialize(d) for d in docs]

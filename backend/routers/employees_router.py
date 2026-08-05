@@ -1,3 +1,5 @@
+import secrets
+import string
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 from db import get_db
@@ -9,9 +11,21 @@ from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, not
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
+async def _dept_ids(db, department):
+    """Return list of user ids (str) in the given department."""
+    if not department:
+        return []
+    return [str(u["_id"]) async for u in db.users.find({"department": department}, {"_id": 1})]
+
+
+def _gen_temp_password(length: int = 10) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "Wg" + "".join(secrets.choice(alphabet) for _ in range(length))
+
+
 @router.get("")
 async def list_employees(q: str | None = None, department: str | None = None, role: str | None = None,
-                         current: UserPublic = Depends(get_current_user)):
+                         current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
     query = {}
     if q:
@@ -22,14 +36,21 @@ async def list_employees(q: str | None = None, department: str | None = None, ro
         ]
     if department: query["department"] = department
     if role: query["role"] = role
+    # Managers only see their own department (team scoping = same department).
+    if current.role == "Manager":
+        query["department"] = current.department
     docs = await db.users.find(query, {"password_hash": 0}).sort("created_at", -1).to_list(500)
     return serialize_many(docs, drop=("password_hash",))
 
 
 @router.post("/invite", status_code=201)
 async def invite_employee(payload: EmployeeInviteIn,
-                          current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+                          current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
+    if payload.role == "Founder":
+        raise HTTPException(403, "Cannot create another Founder")
+    if payload.role == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can create an Admin")
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email already exists")
@@ -54,10 +75,41 @@ async def invite_employee(payload: EmployeeInviteIn,
     return {**serialize(doc), "temp_password": default_pw}
 
 
+@router.post("/{employee_id}/reset-password")
+async def reset_employee_password(employee_id: str, payload: dict | None = None,
+                                  current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    db = get_db()
+    target = await db.users.find_one({"_id": oid(employee_id)})
+    if not target:
+        raise HTTPException(404, "Not found")
+    if target.get("role") == "Founder":
+        raise HTTPException(403, "Cannot reset the Founder password from here")
+    new_password = (payload or {}).get("new_password") or _gen_temp_password()
+    await db.users.update_one(
+        {"_id": oid(employee_id)},
+        {"$set": {"password_hash": hash_password(new_password), "updated_at": utc_iso()}},
+    )
+    await log_activity(db, current, "Reset password", "Employees", target=target["name"])
+    await notify(db, str(target["_id"]), "Your password was reset",
+                 f"{current.name} reset your password. Please sign in with the new temporary password and update it if allowed.",
+                 kind="warning", link="/settings")
+    return {"ok": True, "temp_password": new_password}
+
+
 @router.patch("/{employee_id}")
 async def update_employee(employee_id: str, payload: dict,
                           current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
+    new_role = payload.get("role")
+    if new_role == "Founder":
+        raise HTTPException(403, "Cannot assign the Founder role")
+    if new_role == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can assign the Admin role")
+    target = await db.users.find_one({"_id": oid(employee_id)})
+    if not target:
+        raise HTTPException(404, "Not found")
+    if current.role == "Manager" and target.get("department") != current.department:
+        raise HTTPException(403, "Managers can only edit teammates in their department")
     payload.pop("id", None); payload.pop("_id", None); payload.pop("password_hash", None); payload.pop("email", None)
     payload["updated_at"] = utc_iso()
     res = await db.users.update_one({"_id": oid(employee_id)}, {"$set": payload})
@@ -74,7 +126,6 @@ async def update_employee(employee_id: str, payload: dict,
 async def list_departments(current: UserPublic = Depends(get_current_user)):
     db = get_db()
     docs = await db.departments.find().sort("name", 1).to_list(200)
-    # enrich head_name & headcount
     out = []
     for d in docs:
         head_name = None
@@ -90,7 +141,7 @@ async def list_departments(current: UserPublic = Depends(get_current_user)):
 
 @router.post("/departments/list", status_code=201)
 async def create_department(payload: DepartmentIn,
-                            current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+                            current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
     doc = payload.model_dump()
     doc["created_at"] = utc_iso()
@@ -107,8 +158,13 @@ async def list_attendance(employee_id: str | None = None, date: str | None = Non
                           current: UserPublic = Depends(get_current_user)):
     db = get_db()
     q = {}
-    if employee_id: q["employee_id"] = employee_id
     if date: q["date"] = date
+    if current.role in ("Employee", "Intern"):
+        q["employee_id"] = current.id
+    elif current.role == "Manager":
+        q["employee_id"] = {"$in": await _dept_ids(db, current.department)}
+    elif employee_id:
+        q["employee_id"] = employee_id
     docs = await db.attendance.find(q).sort("date", -1).to_list(500)
     return serialize_many(docs)
 
@@ -117,8 +173,13 @@ async def list_attendance(employee_id: str | None = None, date: str | None = Non
 async def add_attendance(payload: AttendanceIn, current: UserPublic = Depends(get_current_user)):
     db = get_db()
     doc = payload.model_dump()
+    if current.role in ("Employee", "Intern") and doc["employee_id"] != current.id:
+        raise HTTPException(403, "You can only mark your own attendance")
+    if current.role == "Manager":
+        tgt = await db.users.find_one({"_id": oid(doc["employee_id"])})
+        if not tgt or tgt.get("department") != current.department:
+            raise HTTPException(403, "Managers can only mark attendance for their department")
     doc["created_at"] = utc_iso()
-    # Upsert by employee+date
     await db.attendance.update_one(
         {"employee_id": doc["employee_id"], "date": doc["date"]},
         {"$set": doc}, upsert=True,
@@ -137,7 +198,12 @@ async def list_leave(status: str | None = None, employee_id: str | None = None,
     db = get_db()
     q = {}
     if status: q["status"] = status
-    if employee_id: q["employee_id"] = employee_id
+    if current.role in ("Employee", "Intern"):
+        q["employee_id"] = current.id
+    elif current.role == "Manager":
+        q["employee_id"] = {"$in": await _dept_ids(db, current.department)}
+    elif employee_id:
+        q["employee_id"] = employee_id
     docs = await db.leave_requests.find(q).sort("created_at", -1).to_list(500)
     out = []
     for d in docs:
@@ -150,6 +216,12 @@ async def list_leave(status: str | None = None, employee_id: str | None = None,
 async def create_leave(payload: LeaveIn, current: UserPublic = Depends(get_current_user)):
     db = get_db()
     doc = payload.model_dump()
+    if current.role in ("Employee", "Intern") and doc["employee_id"] != current.id:
+        raise HTTPException(403, "You can only request leave for yourself")
+    if current.role == "Manager":
+        tgt = await db.users.find_one({"_id": oid(doc["employee_id"])})
+        if not tgt or tgt.get("department") != current.department:
+            raise HTTPException(403, "Managers can only request leave for their department")
     doc["created_at"] = utc_iso()
     doc["updated_at"] = utc_iso()
     res = await db.leave_requests.insert_one(doc)
@@ -168,6 +240,13 @@ async def update_leave(leave_id: str, payload: dict,
     status = payload.get("status")
     if status not in {"pending", "approved", "rejected"}:
         raise HTTPException(400, "Invalid status")
+    doc = await db.leave_requests.find_one({"_id": oid(leave_id)})
+    if not doc:
+        raise HTTPException(404, "Not found")
+    if current.role == "Manager":
+        emp = await db.users.find_one({"_id": ObjectId(doc["employee_id"])}) if doc.get("employee_id") else None
+        if not emp or emp.get("department") != current.department:
+            raise HTTPException(403, "Managers can only action leave for their department")
     await db.leave_requests.update_one({"_id": oid(leave_id)}, {"$set": {"status": status, "updated_at": utc_iso()}})
     doc = await db.leave_requests.find_one({"_id": oid(leave_id)})
     emp = await db.users.find_one({"_id": ObjectId(doc["employee_id"])}, {"name": 1}) if doc.get("employee_id") else None
@@ -186,7 +265,12 @@ async def list_performance(employee_id: str | None = None,
                            current: UserPublic = Depends(get_current_user)):
     db = get_db()
     q = {}
-    if employee_id: q["employee_id"] = employee_id
+    if current.role in ("Employee", "Intern"):
+        q["employee_id"] = current.id
+    elif current.role == "Manager":
+        q["employee_id"] = {"$in": await _dept_ids(db, current.department)}
+    elif employee_id:
+        q["employee_id"] = employee_id
     docs = await db.performance_reviews.find(q).sort("created_at", -1).to_list(300)
     out = []
     for d in docs:
@@ -202,6 +286,10 @@ async def create_performance(payload: PerformanceIn,
                              current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
     doc = payload.model_dump()
+    if current.role == "Manager":
+        tgt = await db.users.find_one({"_id": oid(doc["employee_id"])})
+        if not tgt or tgt.get("department") != current.department:
+            raise HTTPException(403, "Managers can only review their department")
     doc["created_at"] = utc_iso()
     doc["reviewer_id"] = current.id
     doc["reviewer_name"] = current.name
@@ -221,6 +309,15 @@ async def create_performance(payload: PerformanceIn,
 @router.get("/stats/overview")
 async def employees_overview(current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role in ("Employee", "Intern"):
+        my_leave = await db.leave_requests.count_documents({"employee_id": current.id, "status": "pending"})
+        return {
+            "total": 1,
+            "online": 1 if current.online else 0,
+            "by_role": [{"role": current.role, "count": 1}],
+            "pending_leave": my_leave,
+            "departments": 0,
+        }
     total = await db.users.count_documents({})
     online = await db.users.count_documents({"online": True})
     by_role = {}

@@ -6,7 +6,7 @@ from models import LoginRequest, RegisterRequest, TokenResponse, RefreshRequest,
 from auth_utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
-    get_current_user,
+    get_current_user, require_roles,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -69,7 +69,12 @@ async def login(payload: LoginRequest, request: Request):
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(payload: RegisterRequest, request: Request):
+async def register(payload: RegisterRequest, request: Request,
+                   current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    if payload.role == "Founder":
+        raise HTTPException(status_code=403, detail="Cannot create another Founder")
+    if payload.role == "Admin" and current.role != "Founder":
+        raise HTTPException(status_code=403, detail="Only the Founder can create an Admin")
     db = get_db()
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):

@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessagesSquare, Hash, Users2, Megaphone, Plus, Send, Search, Lock } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -23,6 +24,10 @@ function initials(name) { return (name || "?").split(" ").map(s => s[0]).filter(
 
 export default function WavygoConnect() {
   const { user } = useAuth();
+  const { can } = usePermission();
+  const canCreateChannel = can("connect.create_channel");
+  const canCreateAnnouncement = can("connect.create_announcement");
+  const canPostAnnouncement = can("connect.post_announcement");
   const [channels, setChannels] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -105,7 +110,9 @@ export default function WavygoConnect() {
         actions={
           <>
             <Button variant="outline" onClick={() => setDmOpen(true)}><MessagesSquare className="h-4 w-4 mr-1.5" /> New DM</Button>
-            <Button onClick={() => setCreateOpen(true)} data-testid="connect-create-btn"><Plus className="h-4 w-4 mr-1.5" /> New channel</Button>
+            {canCreateChannel && (
+              <Button onClick={() => setCreateOpen(true)} data-testid="connect-create-btn"><Plus className="h-4 w-4 mr-1.5" /> New channel</Button>
+            )}
           </>
         }
       />
@@ -210,12 +217,14 @@ export default function WavygoConnect() {
                 })}
               </div>
 
-              <div className="border-t border-border px-4 py-3 flex items-center gap-2">
-                <Input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-                       placeholder={`Message ${active.kind === "dm" ? active.display_name || active.name : "#" + active.name}`}
-                       className="h-10" data-testid="connect-message-input" />
-                <Button onClick={send} disabled={!text.trim()} data-testid="connect-send-btn"><Send className="h-4 w-4" /></Button>
-              </div>
+              {(active.kind !== "announcement" || canPostAnnouncement) && (
+                <div className="border-t border-border px-4 py-3 flex items-center gap-2">
+                  <Input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
+                         placeholder={`Message ${active.kind === "dm" ? active.display_name || active.name : "#" + active.name}`}
+                         className="h-10" data-testid="connect-message-input" />
+                  <Button onClick={send} disabled={!text.trim()} data-testid="connect-send-btn"><Send className="h-4 w-4" /></Button>
+                </div>
+              )}
             </>
           )}
         </Card>
@@ -234,7 +243,7 @@ export default function WavygoConnect() {
                 <SelectContent>
                   <SelectItem value="channel">Channel — public</SelectItem>
                   <SelectItem value="group">Group — private</SelectItem>
-                  <SelectItem value="announcement">Announcement — broadcast</SelectItem>
+                  {canCreateAnnouncement && <SelectItem value="announcement">Announcement — broadcast</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

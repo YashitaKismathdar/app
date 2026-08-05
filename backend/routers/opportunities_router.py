@@ -9,6 +9,12 @@ from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, not
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
 
+async def _dept_ids(db, department):
+    if not department:
+        return []
+    return [str(u["_id"]) async for u in db.users.find({"department": department}, {"_id": 1})]
+
+
 async def _enrich(db, doc):
     if doc.get("assignee_id"):
         try:
@@ -27,10 +33,24 @@ async def list_opps(status: str | None = None, type: str | None = None,
                     limit: int = Query(200, ge=1, le=500),
                     current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns do not have access to opportunities")
     q = {}
     if status: q["status"] = status
     if type: q["type"] = type
     if assignee_id: q["assignee_id"] = assignee_id
+
+    role_filter = None
+    if current.role == "Manager":
+        ids = await _dept_ids(db, current.department)
+        role_filter = {"$or": [{"assignee_id": {"$in": ids}}, {"assignee_id": None},
+                               {"assignee_id": {"$exists": False}}]}
+    elif current.role == "Employee":
+        role_filter = {"assignee_id": current.id}
+
+    if role_filter:
+        q = {"$and": [q, role_filter]} if q else role_filter
+
     docs = await db.opportunities.find(q).sort("deadline", 1).to_list(limit)
     for d in docs:
         await _enrich(db, d)
@@ -38,7 +58,8 @@ async def list_opps(status: str | None = None, type: str | None = None,
 
 
 @router.post("", status_code=201)
-async def create_opp(payload: OpportunityIn, current: UserPublic = Depends(get_current_user)):
+async def create_opp(payload: OpportunityIn,
+                     current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
     doc = payload.model_dump()
     doc["created_at"] = utc_iso()
@@ -57,6 +78,8 @@ async def create_opp(payload: OpportunityIn, current: UserPublic = Depends(get_c
 @router.get("/{opp_id}")
 async def get_opp(opp_id: str, current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns do not have access to opportunities")
     doc = await db.opportunities.find_one({"_id": oid(opp_id)})
     if not doc:
         raise HTTPException(404, "Not found")
@@ -67,6 +90,21 @@ async def get_opp(opp_id: str, current: UserPublic = Depends(get_current_user)):
 @router.patch("/{opp_id}")
 async def update_opp(opp_id: str, payload: dict, current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns do not have access to opportunities")
+    existing = await db.opportunities.find_one({"_id": oid(opp_id)})
+    if not existing:
+        raise HTTPException(404, "Not found")
+    if current.role == "Employee":
+        if existing.get("assignee_id") != current.id:
+            raise HTTPException(403, "You can only edit opportunities assigned to you")
+        payload = {k: v for k, v in payload.items() if k in ("status", "notes", "documents")}
+        if not payload:
+            raise HTTPException(403, "You can only edit status, notes or documents")
+    elif current.role == "Manager":
+        ids = await _dept_ids(db, current.department)
+        if existing.get("assignee_id") and existing["assignee_id"] not in ids:
+            raise HTTPException(403, "Managers can only edit opportunities in their department")
     payload.pop("id", None); payload.pop("_id", None); payload.pop("created_at", None)
     payload["updated_at"] = utc_iso()
     res = await db.opportunities.update_one({"_id": oid(opp_id)}, {"$set": payload})
@@ -79,7 +117,8 @@ async def update_opp(opp_id: str, payload: dict, current: UserPublic = Depends(g
 
 
 @router.post("/{opp_id}/assign")
-async def assign_opp(opp_id: str, payload: OpportunityAssign, current: UserPublic = Depends(get_current_user)):
+async def assign_opp(opp_id: str, payload: OpportunityAssign,
+                     current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
     db = get_db()
     await db.opportunities.update_one({"_id": oid(opp_id)}, {"$set": {"assignee_id": payload.assignee_id, "status": "assigned", "updated_at": utc_iso()}})
     doc = await db.opportunities.find_one({"_id": oid(opp_id)})
@@ -95,6 +134,13 @@ async def assign_opp(opp_id: str, payload: OpportunityAssign, current: UserPubli
 @router.patch("/{opp_id}/status")
 async def update_opp_status(opp_id: str, payload: OpportunityStatusPatch, current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns do not have access to opportunities")
+    existing = await db.opportunities.find_one({"_id": oid(opp_id)})
+    if not existing:
+        raise HTTPException(404, "Not found")
+    if current.role == "Employee" and existing.get("assignee_id") != current.id:
+        raise HTTPException(403, "You can only update opportunities assigned to you")
     await db.opportunities.update_one({"_id": oid(opp_id)}, {"$set": {"status": payload.status, "updated_at": utc_iso()}})
     doc = await db.opportunities.find_one({"_id": oid(opp_id)})
     await _enrich(db, doc)
@@ -103,7 +149,7 @@ async def update_opp_status(opp_id: str, payload: OpportunityStatusPatch, curren
 
 
 @router.delete("/{opp_id}")
-async def delete_opp(opp_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+async def delete_opp(opp_id: str, current: UserPublic = Depends(require_roles("Founder"))):
     db = get_db()
     doc = await db.opportunities.find_one({"_id": oid(opp_id)})
     if not doc:

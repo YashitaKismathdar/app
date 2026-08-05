@@ -1,6 +1,10 @@
 """Founder dashboard aggregates — Part 2 uses REAL data from Marketplace, Tasks,
 Opportunities, Employees and Notifications. Live/system status stays deterministic
-in Part 1 style. Backward-compatible with Part 1 fields."""
+in Part 1 style. Backward-compatible with Part 1 fields.
+
+RBAC: Founder/Admin/Manager get company-wide stats. Employee/Intern get a
+role-scoped payload with the same top-level shape (empty arrays where company
+data would be)."""
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from bson import ObjectId
@@ -29,9 +33,70 @@ async def _sum(db, match):
     return float(r[0]["sum"]) if r else 0.0
 
 
+async def _personal_stats(db, current: UserPublic):
+    """Role-scoped dashboard payload for Employee / Intern. Preserves top-level shape."""
+    uid = current.id
+
+    async def tc(q): return await db.tasks.count_documents(q)
+    my_todo = await tc({"assignee_id": uid, "status": "todo"})
+    my_prog = await tc({"assignee_id": uid, "status": "in_progress"})
+    my_review = await tc({"assignee_id": uid, "status": "review"})
+    my_done = await tc({"assignee_id": uid, "status": "completed"})
+    my_leave = await db.leave_requests.count_documents({"employee_id": uid, "status": "pending"})
+
+    kpis = [
+        {"key": "my_todo",        "label": "My To-do",      "value": my_todo,   "delta": 0, "format": "number"},
+        {"key": "my_in_progress", "label": "In Progress",   "value": my_prog,   "delta": 0, "format": "number"},
+        {"key": "my_review",      "label": "In Review",     "value": my_review, "delta": 0, "format": "number"},
+        {"key": "my_completed",   "label": "Completed",     "value": my_done,   "delta": 0, "format": "number"},
+        {"key": "my_leave",       "label": "Pending Leave", "value": my_leave,  "delta": 0, "format": "number"},
+    ]
+
+    prio = {"urgent": 4, "high": 3, "medium": 2, "low": 1}
+    task_docs = await db.tasks.find({"assignee_id": uid, "status": {"$in": ["todo", "in_progress"]}}).to_list(50)
+    task_docs.sort(key=lambda t: (-prio.get(t.get("priority"), 0), t.get("due_date") or ""))
+    tasks_today = [{
+        "id": str(t["_id"]), "title": t["title"], "priority": t.get("priority", "medium"),
+        "status": t["status"], "due": t.get("due_date"), "assignee_name": current.name,
+        "module": t.get("module"),
+    } for t in task_docs[:5]]
+
+    opportunities = []
+    if current.role == "Employee":
+        opp_docs = await db.opportunities.find({"assignee_id": uid}).sort("deadline", 1).to_list(10)
+        for o in opp_docs[:3]:
+            opportunities.append({
+                "id": str(o["_id"]), "title": o["title"], "stage": o["status"].replace("_", " ").title(),
+                "value": o.get("value_lakhs") or 0,
+                "probability": {"open": 30, "assigned": 50, "in_progress": 65}.get(o["status"], 40),
+            })
+
+    notif_docs = await db.notifications.find({"$or": [{"user_id": uid}, {"user_id": None}]}).sort("created_at", -1).to_list(5)
+    recent_notifications = [{
+        "id": str(n["_id"]), "title": n["title"], "body": n["body"], "kind": n.get("kind", "info"),
+        "read": n.get("read", False), "created_at": n.get("created_at"),
+    } for n in notif_docs]
+
+    return {
+        "kpis": kpis,
+        "revenue_series": [],
+        "bookings_series": [],
+        "cities": [],
+        "vendor_perf": [],
+        "tasks_today": tasks_today,
+        "upcoming_events": [],
+        "opportunities": opportunities,
+        "recent_notifications": recent_notifications,
+        "company_health": None,
+        "system_status": None,
+    }
+
+
 @router.get("/stats")
 async def stats(current: UserPublic = Depends(get_current_user)):
     db = get_db()
+    if current.role in ("Employee", "Intern"):
+        return await _personal_stats(db, current)
     today = _today_prefix()
     week = _week_ago().isoformat()
     month = _month_ago().isoformat()

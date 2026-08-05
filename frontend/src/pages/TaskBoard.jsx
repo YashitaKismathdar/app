@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, ClipboardList, CheckCircle2, Clock, Sparkles, Calendar as CalIcon, MessageSquare, Trash2 } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
+import { usePermission } from "@/hooks/usePermission";
 import { toast } from "sonner";
 
 const STATUS_ORDER = ["todo", "in_progress", "review", "completed", "cancelled"];
@@ -50,7 +51,7 @@ function TaskCard({ task, onOpen, onStatusChange }) {
   );
 }
 
-function Column({ status, tasks, onOpen, onStatusChange, onNew }) {
+function Column({ status, tasks, onOpen, onStatusChange, onNew, canCreate }) {
   return (
     <div
       onDragOver={(e) => e.preventDefault()}
@@ -66,9 +67,11 @@ function Column({ status, tasks, onOpen, onStatusChange, onNew }) {
           <StatusPill status={status} />
           <span className="text-[12px] text-muted-foreground">{tasks.length}</span>
         </div>
-        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onNew(status)}>
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
+        {canCreate && (
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onNew(status)}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
       <div className="space-y-2 flex-1">
         {tasks.map(t => <TaskCard key={t.id} task={t} onOpen={onOpen} onStatusChange={onStatusChange} />)}
@@ -78,6 +81,14 @@ function Column({ status, tasks, onOpen, onStatusChange, onNew }) {
 }
 
 export default function TaskBoard() {
+  const { can, role } = usePermission();
+  const canCreate = can("task.create");
+  const canDelete = can("task.delete");
+  const canAssign = can("task.assign");
+  const taskTitle = role === "Employee" ? "My Tasks" : role === "Intern" ? "Assigned Tasks" : "Task Board";
+  const taskDesc = role === "Employee" || role === "Intern"
+    ? "Your tasks — track progress and move them across statuses."
+    : "Every task across WavyGo — assign, comment, drag between statuses, and never lose track.";
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
@@ -153,9 +164,9 @@ export default function TaskBoard() {
     <div data-testid="taskboard-page">
       <PageHeader
         eyebrow="Module"
-        title="Task Board"
-        description="Every task across WavyGo — assign, comment, drag between statuses, and never lose track."
-        actions={<Button onClick={() => setOpen(true)} data-testid="task-create-btn"><Plus className="h-4 w-4 mr-1.5" /> New task</Button>}
+        title={taskTitle}
+        description={taskDesc}
+        actions={canCreate && <Button onClick={() => setOpen(true)} data-testid="task-create-btn"><Plus className="h-4 w-4 mr-1.5" /> New task</Button>}
       />
 
       {stats && (
@@ -182,7 +193,7 @@ export default function TaskBoard() {
           <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-4">
             {STATUS_ORDER.map(s => (
               <Column key={s} status={s} tasks={byStatus[s] || []} onOpen={openDetail} onStatusChange={setStatus}
-                      onNew={(status) => { setForm(f => ({ ...f, status })); setOpen(true); }} />
+                      onNew={(status) => { setForm(f => ({ ...f, status })); setOpen(true); }} canCreate={canCreate} />
             ))}
           </div>
         </TabsContent>
@@ -264,14 +275,18 @@ export default function TaskBoard() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Module</Label><Input className="mt-1" value={form.module} onChange={(e) => setForm(s => ({ ...s, module: e.target.value }))} /></div>
               <div>
-                <Label>Assignee</Label>
-                <Select value={form.assignee_id || ""} onValueChange={(v) => setForm(s => ({ ...s, assignee_id: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select teammate" /></SelectTrigger>
-                  <SelectContent>{userOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>Module</Label><Input className="mt-1" value={form.module} onChange={(e) => setForm(s => ({ ...s, module: e.target.value }))} />
               </div>
+              {canAssign && (
+                <div>
+                  <Label>Assignee</Label>
+                  <Select value={form.assignee_id || ""} onValueChange={(v) => setForm(s => ({ ...s, assignee_id: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select teammate" /></SelectTrigger>
+                    <SelectContent>{userOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div><Label>Due date</Label><Input type="date" className="mt-1" value={form.due_date || ""} onChange={(e) => setForm(s => ({ ...s, due_date: e.target.value }))} /></div>
           </div>
@@ -342,7 +357,7 @@ export default function TaskBoard() {
               </div>
 
               <DialogFooter>
-                <Button variant="ghost" onClick={() => deleteTask(activeTask.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-1.5" /> Delete</Button>
+                {canDelete && <Button variant="ghost" onClick={() => deleteTask(activeTask.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-1.5" /> Delete</Button>}
                 <Button onClick={() => setDetailOpen(false)}>Close</Button>
               </DialogFooter>
             </>

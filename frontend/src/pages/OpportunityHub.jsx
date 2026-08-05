@@ -20,6 +20,11 @@ const STATUSES = ["open", "assigned", "in_progress", "won", "lost", "closed"];
 function initials(name) { return (name || "?").split(" ").map(s => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase(); }
 
 export default function OpportunityHub() {
+  const { can, role } = usePermission();
+  const canCreate = can("opportunity.create");
+  const canAssign = can("opportunity.assign");
+  const canDelete = can("opportunity.delete");
+  const oppTitle = role === "Employee" ? "My Opportunities" : "Opportunity Hub";
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
@@ -67,13 +72,15 @@ export default function OpportunityHub() {
 
   function edit(o) { setEditing(o); setForm({ ...form, ...o, assignee_id: o.assignee_id || "" }); setOpen(true); }
 
+  const fieldsLocked = !!editing && role === "Employee";
+
   return (
     <div data-testid="opportunity-page">
       <PageHeader
         eyebrow="Module"
-        title="Opportunity Hub"
+        title={oppTitle}
         description="Track every grant, investor conversation, tender, partnership and CSR deal in one place."
-        actions={<Button onClick={() => { setEditing(null); setOpen(true); }} data-testid="opp-create-btn"><Plus className="h-4 w-4 mr-1.5" /> Log opportunity</Button>}
+        actions={canCreate && <Button onClick={() => { setEditing(null); setOpen(true); }} data-testid="opp-create-btn"><Plus className="h-4 w-4 mr-1.5" /> Log opportunity</Button>}
       />
 
       {stats && (
@@ -136,7 +143,7 @@ export default function OpportunityHub() {
                   <div className="flex items-center gap-1">
                     {o.link && <a href={o.link} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground p-1"><ExternalLink className="h-3.5 w-3.5" /></a>}
                     <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => edit(o)}>Edit</Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del(o.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    {canDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del(o.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
                   </div>
                 </div>
                 <div className="flex gap-1 pt-1">
@@ -157,23 +164,24 @@ export default function OpportunityHub() {
             <DialogDescription>Every opportunity you log publishes to Activity Logs and notifies the assignee.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div><Label>Title</Label><Input value={form.title} onChange={(e) => setForm(s => ({ ...s, title: e.target.value }))} data-testid="opp-title-input" /></div>
+            {fieldsLocked && <div className="rounded-md border border-border bg-muted/40 p-2.5 text-[12px] text-muted-foreground">As the assignee, you can update the status only.</div>}
+            <div><Label>Title</Label><Input disabled={fieldsLocked} value={form.title} onChange={(e) => setForm(s => ({ ...s, title: e.target.value }))} data-testid="opp-title-input" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Type</Label>
-                <Select value={form.type} onValueChange={(v) => setForm(s => ({ ...s, type: v }))}>
+                <Select value={form.type} onValueChange={(v) => setForm(s => ({ ...s, type: v }))} disabled={fieldsLocked}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{OPP_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Organisation</Label><Input value={form.organisation} onChange={(e) => setForm(s => ({ ...s, organisation: e.target.value }))} /></div>
+              <div><Label>Organisation</Label><Input disabled={fieldsLocked} value={form.organisation} onChange={(e) => setForm(s => ({ ...s, organisation: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Deadline</Label><Input type="date" value={form.deadline || ""} onChange={(e) => setForm(s => ({ ...s, deadline: e.target.value }))} /></div>
-              <div><Label>Value (₹ lakhs)</Label><Input type="number" value={form.value_lakhs} onChange={(e) => setForm(s => ({ ...s, value_lakhs: parseFloat(e.target.value) || 0 }))} /></div>
+              <div><Label>Deadline</Label><Input disabled={fieldsLocked} type="date" value={form.deadline || ""} onChange={(e) => setForm(s => ({ ...s, deadline: e.target.value }))} /></div>
+              <div><Label>Value (₹ lakhs)</Label><Input disabled={fieldsLocked} type="number" value={form.value_lakhs} onChange={(e) => setForm(s => ({ ...s, value_lakhs: parseFloat(e.target.value) || 0 }))} /></div>
             </div>
-            <div><Label>Link</Label><Input value={form.link} onChange={(e) => setForm(s => ({ ...s, link: e.target.value }))} placeholder="https://…" /></div>
-            <div><Label>Description</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm(s => ({ ...s, description: e.target.value }))} /></div>
+            <div><Label>Link</Label><Input disabled={fieldsLocked} value={form.link} onChange={(e) => setForm(s => ({ ...s, link: e.target.value }))} placeholder="https://…" /></div>
+            <div><Label>Description</Label><Textarea disabled={fieldsLocked} rows={3} value={form.description} onChange={(e) => setForm(s => ({ ...s, description: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Status</Label>
@@ -184,7 +192,7 @@ export default function OpportunityHub() {
               </div>
               <div>
                 <Label>Assignee</Label>
-                <Select value={form.assignee_id} onValueChange={(v) => setForm(s => ({ ...s, assignee_id: v }))}>
+                <Select value={form.assignee_id} onValueChange={(v) => setForm(s => ({ ...s, assignee_id: v }))} disabled={fieldsLocked || !canAssign}>
                   <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                   <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
                 </Select>

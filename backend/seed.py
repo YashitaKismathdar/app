@@ -52,9 +52,21 @@ async def seed_all():
 
     # Indexes
     await db.users.create_index("email", unique=True)
+    await db.users.create_index(
+        "role", unique=True,
+        partialFilterExpression={"role": "Founder"}, name="unique_founder",
+    )
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.activity_logs.create_index([("created_at", -1)])
     await db.sessions.create_index("refresh_token_id")
+
+    # Safety: warn (never crash) if more than one Founder somehow exists.
+    founder_count = await db.users.count_documents({"role": "Founder"})
+    if founder_count > 1:
+        import logging
+        logging.getLogger("wavygo").critical(
+            "RBAC invariant violated: %d Founder accounts exist (expected exactly 1).", founder_count
+        )
 
     founder_id: str | None = None
     for spec in ROLE_ACCOUNTS:
