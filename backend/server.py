@@ -32,6 +32,12 @@ app = FastAPI(title="WavyGo OS API", version="1.0.0")
 api = APIRouter(prefix="/api")
 
 
+@app.get("/")
+@app.head("/")
+async def root_head():
+    return {"service": "WavyGo OS API", "status": "ok"}
+
+
 @api.get("/")
 async def root():
     return {"service": "WavyGo OS API", "status": "ok"}
