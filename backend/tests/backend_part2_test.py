@@ -1,3 +1,4 @@
+from __future__ import annotations
 """WavyGo OS Part 2 backend API tests — Marketplace, Tasks, Employees,
 Opportunities, WavyGo Connect + enhanced Dashboard. Uses only public backend
 URL. Idempotent — extra rows created here are fine, seed is idempotent."""

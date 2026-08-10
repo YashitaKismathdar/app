@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Target, Plus, Trophy, Calendar as CalendarIcon, ExternalLink, Trash2, User } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { usePermission } from "@/hooks/usePermission";
 
 const OPP_TYPES = ["Grant", "Investor", "Accelerator", "Incubator", "Competition", "Government Scheme", "Tender", "CSR", "Partnership", "Workshop", "Conference"];
 const STATUSES = ["open", "assigned", "in_progress", "won", "lost", "closed"];
@@ -36,12 +37,16 @@ export default function OpportunityHub() {
   const [form, setForm] = useState({ title: "", type: "Grant", description: "", organisation: "", deadline: "", value_lakhs: 0, status: "open", assignee_id: "", link: "" });
 
   async function load() {
-    const [{ data: r }, { data: u }, { data: s }] = await Promise.all([
-      api.get("/opportunities"),
-      api.get("/users").catch(() => ({ data: [] })),
-      api.get("/opportunities/stats/overview"),
-    ]);
-    setRows(r); setUsers(u); setStats(s);
+    try {
+      const [{ data: r }, { data: u }, { data: s }] = await Promise.all([
+        api.get("/opportunities"),
+        api.get("/users").catch(() => ({ data: [] })),
+        api.get("/opportunities/stats/overview").catch(() => ({ data: null })),
+      ]);
+      setRows(r || []); setUsers(u || []); setStats(s || null);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -102,7 +107,7 @@ export default function OpportunityHub() {
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All statuses</SelectItem>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace("_"," ")}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="all">All statuses</SelectItem>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
@@ -141,8 +146,16 @@ export default function OpportunityHub() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    {o.link && <a href={o.link} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground p-1"><ExternalLink className="h-3.5 w-3.5" /></a>}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => edit(o)}>Edit</Button>
+                    {o.link ? (
+                      <a href={o.link.startsWith("http") ? o.link : `https://${o.link}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted" title="Open opportunity link">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <button type="button" onClick={() => toast.info("No external link provided for this opportunity")} className="text-muted-foreground/40 hover:text-muted-foreground p-1.5 rounded hover:bg-muted" title="No external link">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {role !== "Employee" && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => edit(o)}>Edit</Button>}
                     {canDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del(o.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
                   </div>
                 </div>
@@ -187,7 +200,7 @@ export default function OpportunityHub() {
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm(s => ({ ...s, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace("_"," ")}</SelectItem>)}</SelectContent>
+                  <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>

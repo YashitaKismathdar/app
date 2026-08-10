@@ -1,3 +1,4 @@
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 from db import get_db
@@ -73,6 +74,44 @@ async def create_opp(payload: OpportunityIn,
         await notify(db, doc["assignee_id"], "Opportunity assigned",
                      f"{current.name} assigned you: {doc['title']}", kind="info", link="/opportunity-hub")
     return serialize(doc)
+
+
+@router.get("/stats/overview")
+async def opp_stats(current: UserPublic = Depends(get_current_user)):
+    db = get_db()
+    if current.role == "Intern":
+        raise HTTPException(403, "Interns do not have access to opportunities")
+    q = {}
+    if current.role == "Manager":
+        ids = await _dept_ids(db, current.department)
+        q = {"$or": [{"assignee_id": {"$in": ids}}, {"assignee_id": None}, {"assignee_id": {"$exists": False}}]}
+    elif current.role == "Employee":
+        q = {"assignee_id": current.id}
+
+    async def c(status_val):
+        query = {"$and": [q, {"status": status_val}]} if q else {"status": status_val}
+        return await db.opportunities.count_documents(query)
+
+    mine_query = {"assignee_id": current.id, "status": {"$nin": ["won", "lost", "closed"]}}
+
+    active_q = {"$and": [q, {"status": {"$in": ["open", "assigned", "in_progress"]}}]} if q else {"status": {"$in": ["open", "assigned", "in_progress"]}}
+    pipeline_cursor = db.opportunities.find(active_q, {"value_lakhs": 1})
+    pipeline_lakhs = sum([doc.get("value_lakhs", 0) or 0 async for doc in pipeline_cursor])
+
+    won_q = {"$and": [q, {"status": "won"}]} if q else {"status": "won"}
+    won_cursor = db.opportunities.find(won_q, {"value_lakhs": 1})
+    won_lakhs = sum([doc.get("value_lakhs", 0) or 0 async for doc in won_cursor])
+
+    return {
+        "open":        await c("open"),
+        "assigned":    await c("assigned"),
+        "in_progress": await c("in_progress"),
+        "won":         await c("won"),
+        "lost":        await c("lost"),
+        "mine":        await db.opportunities.count_documents(mine_query),
+        "pipeline_lakhs": round(pipeline_lakhs, 2),
+        "won_lakhs": round(won_lakhs, 2),
+    }
 
 
 @router.get("/{opp_id}")
@@ -157,17 +196,3 @@ async def delete_opp(opp_id: str, current: UserPublic = Depends(require_roles("F
     await db.opportunities.delete_one({"_id": oid(opp_id)})
     await log_activity(db, current, "Deleted opportunity", "Opportunity Hub", target=doc["title"])
     return {"ok": True}
-
-
-@router.get("/stats/overview")
-async def opp_stats(current: UserPublic = Depends(get_current_user)):
-    db = get_db()
-    async def c(q): return await db.opportunities.count_documents(q)
-    return {
-        "open":        await c({"status": "open"}),
-        "assigned":    await c({"status": "assigned"}),
-        "in_progress": await c({"status": "in_progress"}),
-        "won":         await c({"status": "won"}),
-        "lost":        await c({"status": "lost"}),
-        "mine":        await c({"assignee_id": current.id, "status": {"$nin": ["won", "lost", "closed"]}}),
-    }

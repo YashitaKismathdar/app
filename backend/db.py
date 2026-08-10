@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Shared MongoDB client + Pydantic ObjectId helpers."""
 import os
 from typing import Annotated, Any

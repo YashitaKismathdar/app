@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Pydantic models for WavyGo OS core collections."""
 from datetime import datetime
 from typing import Literal, Optional
