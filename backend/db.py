@@ -1,8 +1,9 @@
 from __future__ import annotations
 """Shared MongoDB client + Pydantic ObjectId helpers."""
 import os
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 from bson import ObjectId
+# pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BeforeValidator, BaseModel, ConfigDict, Field
 from datetime import datetime, timezone
@@ -24,7 +25,7 @@ PyObjectId = Annotated[str, BeforeValidator(_validate_object_id)]
 class BaseDocument(BaseModel):
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
-    id: PyObjectId | None = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
 
     @classmethod
     def from_mongo(cls, doc: dict | None):
