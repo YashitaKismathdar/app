@@ -47,6 +47,7 @@ export default function WavygoConnect() {
   }
   async function loadUsers() { try { const { data } = await api.get("/users"); setUsers(data); } catch { /* noop */ } }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadChannels(); loadUsers(); }, []);
 
   async function loadMessages(id) {
