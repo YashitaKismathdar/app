@@ -1,6 +1,7 @@
 from __future__ import annotations
 """WavyGo OS backend API tests."""
 import os
+# pyrefly: ignore [missing-import]
 import pytest
 import requests
 
