@@ -86,9 +86,11 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Founder Dashboard</div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            {user?.role ? `${user.role} Dashboard` : "Dashboard"}
+          </div>
           <h1 className="font-display text-3xl md:text-[34px] font-semibold tracking-tighter text-foreground mt-1">
-            The pulse of WavyGo, {(user?.name || "").split(" ")[0]}.
+            Welcome back, {(user?.name || "").split(" ")[0] || "there"}.
           </h1>
           <p className="text-sm text-muted-foreground mt-2 max-w-xl">
             A live view of every city, vehicle and rupee moving through WavyGo Mobility. Updated moments ago.
