@@ -132,6 +132,7 @@ class TaskIn(BaseModel):
     tags: List[str] = Field(default_factory=list)
     subtasks: List[SubtaskIn] = Field(default_factory=list)
     attachments: List[str] = Field(default_factory=list)
+    link: Optional[str] = None
 
 
 class TaskStatusPatch(BaseModel):

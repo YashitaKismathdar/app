@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, ClipboardList, CheckCircle2, Clock, Sparkles, Calendar as CalIcon, MessageSquare, Trash2, FileText, Paperclip, Download, X } from "lucide-react";
+import { Plus, ClipboardList, CheckCircle2, Clock, Sparkles, Calendar as CalIcon, MessageSquare, Trash2, FileText, Paperclip, Download, X, ExternalLink, Github, Linkedin, Link as LinkIcon } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { usePermission } from "@/hooks/usePermission";
 import { toast } from "sonner";
@@ -20,6 +20,22 @@ const STATUS_LABEL = { todo: "To do", in_progress: "In progress", review: "Revie
 
 function initials(name) {
   return (name || "?").split(" ").map(s => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+}
+
+function getLinkIcon(url) {
+  if (!url) return <ExternalLink className="h-3 w-3" />;
+  const l = url.toLowerCase();
+  if (l.includes("github.com")) return <Github className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />;
+  if (l.includes("linkedin.com")) return <Linkedin className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />;
+  return <LinkIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />;
+}
+
+function getLinkLabel(url) {
+  if (!url) return "Link";
+  const l = url.toLowerCase();
+  if (l.includes("github.com")) return "GitHub";
+  if (l.includes("linkedin.com")) return "LinkedIn";
+  return "Link";
 }
 
 function PdfChip({ url, name, onRemove }) {
@@ -78,6 +94,20 @@ function TaskCard({ task, onOpen }) {
           <Badge variant="outline" className="text-[10px] gap-1 bg-red-500/10 text-red-600 border-red-200 dark:border-red-900">
             <FileText className="h-3 w-3" /> {pdfCount} PDF
           </Badge>
+        )}
+        {task.link && (
+          <a
+            href={task.link.startsWith("http") ? task.link : `https://${task.link}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title={task.link}
+            className="inline-flex items-center"
+          >
+            <Badge variant="outline" className="text-[10px] gap-1 bg-muted/50 hover:bg-muted text-foreground cursor-pointer transition-colors">
+              {getLinkIcon(task.link)} {getLinkLabel(task.link)}
+            </Badge>
+          </a>
         )}
       </div>
 
@@ -147,7 +177,7 @@ export default function TaskBoard() {
   const [open, setOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [activeTask, setActiveTask] = useState(null);
-  const [form, setForm] = useState({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [] });
+  const [form, setForm] = useState({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [], link: "" });
 
   const [comment, setComment] = useState("");
   const [commentPdf, setCommentPdf] = useState(null); // { url, name }
@@ -208,9 +238,9 @@ export default function TaskBoard() {
   async function createTask() {
     try {
       await api.post("/tasks", form);
-      toast.success("Task created with PDF attachment(s)");
+      toast.success("Task created");
       setOpen(false);
-      setForm({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [] });
+      setForm({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [], link: "" });
       load();
     } catch (e) { toast.error(formatApiError(e)); }
   }
@@ -283,7 +313,7 @@ export default function TaskBoard() {
         title={taskTitle}
         description={taskDesc}
         actions={canCreate && (
-          <Button onClick={() => { setForm({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [] }); setOpen(true); }} data-testid="task-create-btn">
+          <Button onClick={() => { setForm({ title: "", description: "", status: "todo", priority: "medium", module: "General", attachments: [], link: "" }); setOpen(true); }} data-testid="task-create-btn">
             <Plus className="h-4 w-4 mr-1.5" /> New task
           </Button>
         )}
@@ -431,6 +461,18 @@ export default function TaskBoard() {
             </div>
             <div><Label>Due date</Label><Input type="date" className="mt-1" value={form.due_date || ""} onChange={(e) => setForm(s => ({ ...s, due_date: e.target.value }))} /></div>
 
+            <div>
+              <Label className="flex items-center gap-1.5 text-xs font-semibold">
+                <LinkIcon className="h-3.5 w-3.5 text-primary" /> Reference Link (GitHub / LinkedIn / External URL)
+              </Label>
+              <Input
+                className="mt-1"
+                value={form.link || ""}
+                onChange={(e) => setForm(s => ({ ...s, link: e.target.value }))}
+                placeholder="https://github.com/org/repo/issues/1 or https://linkedin.com/in/..."
+              />
+            </div>
+
             {/* PDF Attachment Input on Task Creation */}
             <div className="border-t border-border pt-3">
               <Label className="flex items-center gap-1.5 text-xs font-semibold">
@@ -508,6 +550,23 @@ export default function TaskBoard() {
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Description</div>
                     <p className="text-[13.5px] text-foreground mt-1.5 leading-relaxed">{activeTask.description}</p>
+                  </div>
+                )}
+
+                {activeTask.link && (
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground mb-1.5">Reference Link</div>
+                    <a
+                      href={activeTask.link.startsWith("http") ? activeTask.link : `https://${activeTask.link}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/60 hover:bg-muted border border-border text-xs font-medium text-foreground transition-colors group"
+                    >
+                      {getLinkIcon(activeTask.link)}
+                      <span className="font-semibold text-muted-foreground">{getLinkLabel(activeTask.link)}:</span>
+                      <span className="text-primary hover:underline truncate max-w-[340px]">{activeTask.link}</span>
+                      <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 ml-1 text-muted-foreground" />
+                    </a>
                   </div>
                 )}
 
