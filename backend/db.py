@@ -53,6 +53,12 @@ def utc_iso() -> str:
     return utc_now().isoformat()
 
 
+try:
+    import certifi
+    ca_file = certifi.where()
+except Exception:
+    ca_file = None
+
 _client: AsyncIOMotorClient | None = None
 _db = None
 
@@ -60,8 +66,12 @@ _db = None
 def get_db():
     global _client, _db
     if _db is None:
-        _client = AsyncIOMotorClient(os.environ["MONGO_URL"])
-        _db = _client[os.environ["DB_NAME"]]
+        url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+        kwargs = {}
+        if ca_file and ("mongodb+srv://" in url or "tls=true" in url or "ssl=true" in url):
+            kwargs["tlsCAFile"] = ca_file
+        _client = AsyncIOMotorClient(url, **kwargs)
+        _db = _client[os.environ.get("DB_NAME", "wavygo_db")]
     return _db
 
 
