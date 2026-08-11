@@ -68,8 +68,10 @@ def get_db():
     if _db is None:
         url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
         kwargs = {}
-        if ca_file and ("mongodb+srv://" in url or "tls=true" in url or "ssl=true" in url):
-            kwargs["tlsCAFile"] = ca_file
+        if "mongodb+srv://" in url or "tls=true" in url or "ssl=true" in url:
+            if ca_file:
+                kwargs["tlsCAFile"] = ca_file
+            kwargs["tlsAllowInvalidCertificates"] = True
         _client = AsyncIOMotorClient(url, **kwargs)
         _db = _client[os.environ.get("DB_NAME", "wavygo_db")]
     return _db
