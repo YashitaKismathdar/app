@@ -181,6 +181,8 @@ export default function TaskBoard() {
 
   const [comment, setComment] = useState("");
   const [commentPdf, setCommentPdf] = useState(null); // { url, name }
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
 
   const commentFileInputRef = useRef(null);
   const taskFileInputRef = useRef(null);
@@ -256,11 +258,26 @@ export default function TaskBoard() {
   async function openDetail(t) {
     setActiveTask(t);
     setCommentPdf(null);
+    setEditingLink(false);
+    setLinkInput(t.link || "");
     setDetailOpen(true);
     try {
       const { data } = await api.get(`/tasks/${t.id}`);
       setActiveTask(data);
+      setLinkInput(data.link || "");
     } catch { /* noop */ }
+  }
+
+  async function saveTaskLink() {
+    if (!activeTask) return;
+    try {
+      await api.patch(`/tasks/${activeTask.id}`, { link: linkInput.trim() });
+      const { data } = await api.get(`/tasks/${activeTask.id}`);
+      setActiveTask(data);
+      setEditingLink(false);
+      load();
+      toast.success("Reference link saved");
+    } catch (e) { toast.error(formatApiError(e)); }
   }
 
   async function addComment() {
@@ -553,22 +570,55 @@ export default function TaskBoard() {
                   </div>
                 )}
 
-                {activeTask.link && (
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground mb-1.5">Reference Link</div>
-                    <a
-                      href={activeTask.link.startsWith("http") ? activeTask.link : `https://${activeTask.link}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/60 hover:bg-muted border border-border text-xs font-medium text-foreground transition-colors group"
-                    >
-                      {getLinkIcon(activeTask.link)}
-                      <span className="font-semibold text-muted-foreground">{getLinkLabel(activeTask.link)}:</span>
-                      <span className="text-primary hover:underline truncate max-w-[340px]">{activeTask.link}</span>
-                      <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 ml-1 text-muted-foreground" />
-                    </a>
+                {/* Reference Link Section (View & Edit) */}
+                <div className="border-t border-border pt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                      <LinkIcon className="h-3.5 w-3.5 text-primary" /> Reference Link (GitHub / LinkedIn)
+                    </div>
+                    {!editingLink && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-primary"
+                        onClick={() => { setLinkInput(activeTask.link || ""); setEditingLink(true); }}
+                      >
+                        {activeTask.link ? "Edit link" : "+ Add link"}
+                      </Button>
+                    )}
                   </div>
-                )}
+
+                  {editingLink ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        className="h-8 text-xs font-mono"
+                        placeholder="https://github.com/... or https://linkedin.com/in/..."
+                        value={linkInput}
+                        onChange={(e) => setLinkInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && saveTaskLink()}
+                      />
+                      <Button size="sm" className="h-8 px-3 text-xs" onClick={saveTaskLink}>Save</Button>
+                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setEditingLink(false)}>Cancel</Button>
+                    </div>
+                  ) : activeTask.link ? (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={activeTask.link.startsWith("http") ? activeTask.link : `https://${activeTask.link}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/60 hover:bg-muted border border-border text-xs font-medium text-foreground transition-colors group"
+                      >
+                        {getLinkIcon(activeTask.link)}
+                        <span className="font-semibold text-muted-foreground">{getLinkLabel(activeTask.link)}:</span>
+                        <span className="text-primary hover:underline truncate max-w-[340px]">{activeTask.link}</span>
+                        <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 ml-1 text-muted-foreground" />
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">No GitHub or LinkedIn link added yet.</span>
+                  )}
+                </div>
 
                 {/* PDF Attachments Section under Task Details */}
                 <div className="border-t border-border pt-3">
