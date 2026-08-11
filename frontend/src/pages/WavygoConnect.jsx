@@ -54,6 +54,7 @@ export default function WavygoConnect() {
     try { const { data } = await api.get(`/connect/channels/${id}/messages`); setMessages(data); }
     catch (e) { toast.error(formatApiError(e)); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (activeId) {
       loadMessages(activeId);
