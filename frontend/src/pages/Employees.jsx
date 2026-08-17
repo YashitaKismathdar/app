@@ -187,6 +187,7 @@ function Attendance() {
     setRows(att.map(a => ({ ...a, employee_name: nameMap[a.employee_id] || (user ? user.name : "—") })));
     setUsers(list);
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   async function submit() {
@@ -261,6 +262,7 @@ function Leave() {
     const [{ data: lv }, { data: emps }] = await Promise.all([api.get("/employees/leave/requests"), empReq]);
     setRows(lv); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/leave/requests", form); toast.success("Leave requested"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
   async function decide(id, status) { try { await api.patch(`/employees/leave/requests/${id}`, { status }); toast.success(`Leave ${status}`); load(); } catch (e) { toast.error(formatApiError(e)); } }
@@ -334,6 +336,7 @@ function Performance() {
     const [{ data: pr }, { data: emps }] = await Promise.all([api.get("/employees/performance/reviews"), empReq]);
     setRows(pr); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/performance/reviews", form); toast.success("Review saved"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
 

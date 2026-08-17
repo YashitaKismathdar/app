@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Central RBAC permission matrix for WavyGo OS.
 
 Single source of truth for module visibility and per-action permissions.

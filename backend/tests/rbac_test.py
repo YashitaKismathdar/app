@@ -1,9 +1,11 @@
+from __future__ import annotations
 """RBAC (v3) backend gate tests for WavyGo OS.
 
 Covers: login for 5 roles, password policy, reset-password, marketplace gate,
 task/opportunity/connect/activity gates, register gating, dashboard shape.
 """
 import os
+# pyrefly: ignore [missing-import]
 import pytest
 import requests
 
@@ -11,7 +13,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://wavygo-roles-impl.pr
 API = f"{BASE_URL}/api"
 
 CREDS = {
-    "Founder":  ("founder@wavygo.in",  "Wavygo@2026"),
+    "Founder":  (os.environ.get("FOUNDER_EMAIL", "founder@wavygo.in"),  "Wavygo@2026"),
     "Admin":    ("admin@wavygo.in",    "Wavygo@2026"),
     "Manager":  ("manager@wavygo.in",  "Wavygo@2026"),
     "Employee": ("employee@wavygo.in", "Wavygo@2026"),
@@ -142,7 +144,7 @@ def test_opportunities_gates(tokens):
 
     # Founder creates one
     r = requests.post(f"{API}/opportunities", headers=H(tokens, "Founder"),
-                      json={"title": "TEST_opp_rbac", "type": "lead"})
+                      json={"title": "TEST_opp_rbac", "type": "Grant"})
     assert r.status_code in (200, 201), f"Founder opp create failed {r.status_code}: {r.text}"
     opp_id = r.json().get("id")
 

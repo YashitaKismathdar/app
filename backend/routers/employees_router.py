@@ -1,3 +1,4 @@
+from __future__ import annotations
 import secrets
 import string
 from fastapi import APIRouter, Depends, HTTPException, Query

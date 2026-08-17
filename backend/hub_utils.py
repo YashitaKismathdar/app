@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Shared helpers for Part 2+ modules: activity logs, notifications, doc serialisation."""
 from datetime import datetime, timezone
 from typing import Any, Iterable

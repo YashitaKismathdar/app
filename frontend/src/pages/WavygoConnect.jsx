@@ -47,12 +47,14 @@ export default function WavygoConnect() {
   }
   async function loadUsers() { try { const { data } = await api.get("/users"); setUsers(data); } catch { /* noop */ } }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadChannels(); loadUsers(); }, []);
 
   async function loadMessages(id) {
     try { const { data } = await api.get(`/connect/channels/${id}/messages`); setMessages(data); }
     catch (e) { toast.error(formatApiError(e)); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (activeId) {
       loadMessages(activeId);

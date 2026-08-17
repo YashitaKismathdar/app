@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from __future__ import annotations
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from db import get_db
 from auth_utils import get_current_user, require_roles
 from models import UserPublic
@@ -27,9 +28,9 @@ def _crud(collection_name: str, model_cls, module_name: str, title_field: str = 
         return serialize_many(docs)
 
     @sub.post("", status_code=201)
-    async def create_item(payload: model_cls, current: UserPublic = Depends(get_current_user)):
+    async def create_item(payload: dict = Body(...), current: UserPublic = Depends(get_current_user)):
         db = get_db()
-        doc = payload.model_dump()
+        doc = dict(payload)
         doc["created_at"] = utc_iso()
         doc["updated_at"] = utc_iso()
         res = await db[collection_name].insert_one(doc)

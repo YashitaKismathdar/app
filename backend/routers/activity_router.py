@@ -1,3 +1,4 @@
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from db import get_db
 from auth_utils import get_current_user

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 from db import get_db
@@ -63,7 +64,8 @@ async def create_task(payload: TaskIn, current: UserPublic = Depends(get_current
     if current.role == "Intern":
         raise HTTPException(403, "Interns cannot create tasks")
     doc = payload.model_dump()
-    doc.setdefault("reporter_id", current.id)
+    if not doc.get("reporter_id"):
+        doc["reporter_id"] = current.id
     doc["subtasks"] = [s if isinstance(s, dict) else s.model_dump() for s in doc.get("subtasks", [])]
     doc["comments"] = []
     doc["created_at"] = utc_iso()
@@ -171,6 +173,8 @@ async def add_comment(task_id: str, payload: TaskCommentIn, current: UserPublic 
         "author_id": current.id,
         "author_name": current.name,
         "created_at": utc_iso(),
+        "attachments": payload.attachments or [],
+        "attachment_name": payload.attachment_name,
     }
     await db.tasks.update_one({"_id": oid(task_id)}, {"$push": {"comments": comment}, "$set": {"updated_at": utc_iso()}})
     if doc.get("assignee_id") and doc["assignee_id"] != current.id:
