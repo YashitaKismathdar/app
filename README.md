@@ -236,46 +236,6 @@ VITE_API_BASE_URL=http://localhost:8000/api
 | **Opportunities** | `/api/opportunities` | Internal gig board, project applications |
 | **Settings** | `/api/settings` | Company preferences, role governance, account details |
 
----
-
-## 🔄 GitHub Push & Pull Request (PR) Workflow
-
-This repository includes automated tools, templates, and GitHub Actions CI pipelines to streamline code changes, branch pushes, and Pull Requests.
-
-### 🔀 1. Fast Push & PR Creation via Script
-
-Use the automated script to stage, commit, push, and immediately generate a Pull Request link on GitHub:
-
-#### Option A: Interactive Mode
-```bash
-./scripts/push-pr.sh
-```
-*The script will prompt you for the target branch name and commit message, then output a direct link to open the Pull Request on GitHub.*
-
-#### Option B: One-Liner Command Mode
-```bash
-./scripts/push-pr.sh "feature/attendance-updates" "feat: add check-in location verification"
-```
-
----
-
-### 📋 2. Automated Pull Request Template
-
-When you open a PR on [GitHub Repository](https://github.com/garv-svnitcse/app), GitHub automatically loads the structured template from `.github/PULL_REQUEST_TEMPLATE.md`. It includes:
-- **Type of Change**: Feature, Bug Fix, Role Permission update (Founder / Admin / Employee), AI/Chat update.
-- **Affected Services**: Frontend, Backend API, Database, Roles.
-- **Verification Checklist**: Unit test status, build status, RBAC validation.
-
----
-
-### ⚙️ 3. Continuous Integration (GitHub Actions)
-
-Every push or pull request automatically triggers `.github/workflows/ci.yml` which validates:
-- 🐍 **Backend**: Python 3.10 setup, dependency installation, pytest suite execution.
-- ⚛️ **Frontend**: Node 18 environment, npm build validation.
-
----
-
 ## 🛠️ Testing & Quality Assurance
 
 To execute backend unit and integration tests:
