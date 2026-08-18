@@ -280,31 +280,4 @@ wavygo_db
 | **Notifications**| `GET` / `PATCH`| `/api/notifications` | Fetch alerts or mark as read |
 
 ---
-
-## 🧪 8. Testing & Quality Assurance
-
-To verify system functionality and RBAC policy enforcement, run the automated test suite:
-
-```bash
-cd backend
-pytest backend/tests/rbac_test.py
-```
-
-### Verified Test Scenarios:
-- ✅ **Authentication**: Valid login, invalid credentials rejection, password hashing check.
-- ✅ **RBAC Access Control**: Founder-only endpoint access vs Employee 403 Forbidden checks.
-- ✅ **Task Lifecycle**: Creation, assignment, status state changes, and comment posting.
-- ✅ **Attendance & Leaves**: Check-in/out timestamp validation and leave review approvals.
-
----
-
-## 🚀 9. Future Scope & Roadmap
-
-1. **WebSockets for WavyGo Connect**: Upgrade real-time chat from polling to full duplex WebSockets.
-2. **Automated AI Task Scheduling**: AI auto-assignment based on workload & department availability.
-3. **Advanced EV Fleet Telematics**: Real-time GPS and IoT telemetry integration for vehicles.
-4. **Mobile Native Applications**: iOS and Android mobile wrappers for field attendance and notifications.
-5. **SSO & Two-Factor Authentication (2FA)**: Enterprise OAuth2 / SAML integration.
-
----
 *WavyGo ERP System — Empowering workforce efficiency, intelligent automation, and company growth.*
