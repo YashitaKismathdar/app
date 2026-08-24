@@ -236,14 +236,6 @@ VITE_API_BASE_URL=http://localhost:8000/api
 | **Opportunities** | `/api/opportunities` | Internal gig board, project applications |
 | **Settings** | `/api/settings` | Company preferences, role governance, account details |
 
-## 🛠️ Testing & Quality Assurance
-
-To execute backend unit and integration tests:
-```bash
-cd backend
-pytest
-```
-
 ---
 
 ## 📝 License

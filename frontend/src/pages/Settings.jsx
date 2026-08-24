@@ -37,7 +37,7 @@ export default function Settings() {
 
   async function saveProfile() {
     try {
-      await api.patch("/users/me", profile);
+      await api.patch("/users/me", { phone: profile.phone });
       await refreshMe();
       toast.success("Profile updated");
     } catch (e) { toast.error(formatApiError(e)); }
@@ -71,11 +71,11 @@ export default function Settings() {
           <Card className="border-border">
             <CardHeader><CardTitle className="font-display">Your profile</CardTitle><CardDescription>Update your personal details</CardDescription></CardHeader>
             <CardContent className="space-y-4 max-w-lg">
-              <div><Label>Name</Label><Input className="mt-1.5" value={profile.name} onChange={(e) => setProfile(s => ({ ...s, name: e.target.value }))} data-testid="profile-name" /></div>
+              <div><Label>Name</Label><Input className="mt-1.5" value={profile.name} disabled data-testid="profile-name" /></div>
               <div><Label>Phone</Label><Input className="mt-1.5" value={profile.phone} onChange={(e) => setProfile(s => ({ ...s, phone: e.target.value }))} placeholder="+91" data-testid="profile-phone" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Designation</Label><Input className="mt-1.5" value={profile.designation} onChange={(e) => setProfile(s => ({ ...s, designation: e.target.value }))} data-testid="profile-designation" /></div>
-                <div><Label>Department</Label><Input className="mt-1.5" value={profile.department} onChange={(e) => setProfile(s => ({ ...s, department: e.target.value }))} data-testid="profile-department" /></div>
+                <div><Label>Designation</Label><Input className="mt-1.5" value={profile.designation} disabled data-testid="profile-designation" /></div>
+                <div><Label>Department</Label><Input className="mt-1.5" value={profile.department} disabled data-testid="profile-department" /></div>
               </div>
               <Button onClick={saveProfile} data-testid="save-profile-btn">Save changes</Button>
             </CardContent>

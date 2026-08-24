@@ -25,9 +25,16 @@ async def list_users(_: UserPublic = Depends(require_roles("Founder", "Admin", "
 @router.patch("/me", response_model=UserPublic)
 async def update_me(payload: UpdateProfileRequest, current: UserPublic = Depends(get_current_user)):
     db = get_db()
-    updates = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
+    allowed_fields = {"phone", "photo"}
+    raw_updates = payload.model_dump(exclude_none=True)
+    updates = {k: v for k, v in raw_updates.items() if k in allowed_fields}
     if not updates:
-        return current
+        doc = await db.users.find_one({"_id": ObjectId(current.id)})
+        return UserPublic(
+            id=str(doc["_id"]), email=doc["email"], name=doc["name"], role=doc["role"],
+            photo=doc.get("photo"), online=doc.get("online", False), phone=doc.get("phone"),
+            designation=doc.get("designation"), department=doc.get("department"),
+        )
     updates["updated_at"] = utc_now().isoformat()
     await db.users.update_one({"_id": ObjectId(current.id)}, {"$set": updates})
     doc = await db.users.find_one({"_id": ObjectId(current.id)})
