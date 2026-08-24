@@ -161,6 +161,7 @@ def test_update_profile_and_password_roundtrip(s):
     r = s.patch(f"{API}/users/me", json={"phone": "+919999999999", "designation": "QA Tester"}, headers=h)
     assert r.status_code == 200
     assert r.json()["phone"] == "+919999999999"
+    assert r.json()["designation"] != "QA Tester"
 
     # change password to new
     new_pwd = "Wavygo@2026_TMP"
