@@ -300,6 +300,18 @@ def test_employees_attendance_and_leave_list(founder_h):
     assert r3.status_code == 200
 
 
+def test_employees_attendance_date_restriction(founder_h):
+    # Past date should fail
+    past_payload = {"employee_id": "60d0fe4f5311236168a109ca", "date": "2020-01-01", "status": "present"}
+    r_past = requests.post(f"{API}/employees/attendance/records", json=past_payload, headers=founder_h)
+    assert r_past.status_code == 400
+
+    # Future date should fail
+    future_payload = {"employee_id": "60d0fe4f5311236168a109ca", "date": "2099-12-31", "status": "present"}
+    r_future = requests.post(f"{API}/employees/attendance/records", json=future_payload, headers=founder_h)
+    assert r_future.status_code == 400
+
+
 def test_employees_invite_intern_forbidden(intern_h):
     payload = {"email": f"junk_{uuid.uuid4().hex[:6]}@wavygo.in",
                "name": "Should Fail", "role": "Employee"}

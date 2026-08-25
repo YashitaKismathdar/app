@@ -198,7 +198,7 @@ function Attendance() {
   return (
     <>
       <div className="flex justify-end mb-4">
-        <Button onClick={() => setOpen(true)} data-testid="attendance-mark-btn"><Plus className="h-4 w-4 mr-1.5" /> Mark attendance</Button>
+        <Button onClick={() => { setForm(s => ({ ...s, date: new Date().toISOString().slice(0, 10) })); setOpen(true); }} data-testid="attendance-mark-btn"><Plus className="h-4 w-4 mr-1.5" /> Mark attendance</Button>
       </div>
       <Card className="border-border">
         {rows.length === 0 ? <EmptyState icon={CalendarDays} title="No attendance yet" description="Attendance records will appear here." /> : (
@@ -228,7 +228,7 @@ function Attendance() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Date</Label><Input type="date" value={form.date} onChange={(e) => setForm(s => ({ ...s, date: e.target.value }))} /></div>
+              <div><Label>Date</Label><Input type="date" value={form.date} disabled data-testid="attendance-date" /></div>
               <div>
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm(s => ({ ...s, status: v }))}>
