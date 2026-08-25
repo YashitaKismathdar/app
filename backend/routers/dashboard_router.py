@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Founder dashboard aggregates — Part 2 uses REAL data from Marketplace, Tasks,
 Opportunities, Employees and Notifications. Live/system status stays deterministic
 in Part 1 style. Backward-compatible with Part 1 fields.

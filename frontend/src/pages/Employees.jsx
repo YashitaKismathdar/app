@@ -187,6 +187,7 @@ function Attendance() {
     setRows(att.map(a => ({ ...a, employee_name: nameMap[a.employee_id] || (user ? user.name : "—") })));
     setUsers(list);
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   async function submit() {
@@ -197,7 +198,7 @@ function Attendance() {
   return (
     <>
       <div className="flex justify-end mb-4">
-        <Button onClick={() => setOpen(true)} data-testid="attendance-mark-btn"><Plus className="h-4 w-4 mr-1.5" /> Mark attendance</Button>
+        <Button onClick={() => { setForm(s => ({ ...s, date: new Date().toISOString().slice(0, 10) })); setOpen(true); }} data-testid="attendance-mark-btn"><Plus className="h-4 w-4 mr-1.5" /> Mark attendance</Button>
       </div>
       <Card className="border-border">
         {rows.length === 0 ? <EmptyState icon={CalendarDays} title="No attendance yet" description="Attendance records will appear here." /> : (
@@ -227,7 +228,7 @@ function Attendance() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Date</Label><Input type="date" value={form.date} onChange={(e) => setForm(s => ({ ...s, date: e.target.value }))} /></div>
+              <div><Label>Date</Label><Input type="date" value={form.date} disabled data-testid="attendance-date" /></div>
               <div>
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm(s => ({ ...s, status: v }))}>
@@ -261,6 +262,7 @@ function Leave() {
     const [{ data: lv }, { data: emps }] = await Promise.all([api.get("/employees/leave/requests"), empReq]);
     setRows(lv); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/leave/requests", form); toast.success("Leave requested"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
   async function decide(id, status) { try { await api.patch(`/employees/leave/requests/${id}`, { status }); toast.success(`Leave ${status}`); load(); } catch (e) { toast.error(formatApiError(e)); } }
@@ -334,6 +336,7 @@ function Performance() {
     const [{ data: pr }, { data: emps }] = await Promise.all([api.get("/employees/performance/reviews"), empReq]);
     setRows(pr); setUsers(canDir ? emps : (user ? [{ id: user.id, name: user.name }] : []));
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
   async function submit() { try { await api.post("/employees/performance/reviews", form); toast.success("Review saved"); setOpen(false); load(); } catch (e) { toast.error(formatApiError(e)); } }
 

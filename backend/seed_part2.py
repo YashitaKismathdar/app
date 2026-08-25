@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Part 2 seed — idempotent. Populates cities, vendors, vehicles, customers, bookings,
 pricing, coupons, KYC requests, support tickets, reviews, tasks, departments, leave,
 performance, opportunities and WavyGo Connect channels."""

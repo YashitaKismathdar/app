@@ -57,6 +57,7 @@ function CrudTable({ endpoint, columns, formFields, title, module, testid, defau
       setRows(data);
     } catch (e) { toast.error(formatApiError(e)); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [endpoint]);
 
   const filtered = useMemo(() => {

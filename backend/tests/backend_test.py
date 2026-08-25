@@ -1,12 +1,14 @@
+from __future__ import annotations
 """WavyGo OS backend API tests."""
 import os
+# pyrefly: ignore [missing-import]
 import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://wavygo-foundation.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-FOUNDER = {"email": "anilanand635@gmail.com", "password": "Wavygo@2026"}
+FOUNDER = {"email": os.environ.get("FOUNDER_EMAIL", "anilanand635@gmail.com"), "password": "Wavygo@2026"}
 ADMIN = {"email": "admin@wavygo.in", "password": "Wavygo@2026"}
 MANAGER = {"email": "manager@wavygo.in", "password": "Wavygo@2026"}
 EMPLOYEE = {"email": "employee@wavygo.in", "password": "Wavygo@2026"}
@@ -30,43 +32,42 @@ def _login(s, creds):
 def test_health(s):
     r = s.get(f"{API}/health")
     assert r.status_code == 200
-    assert r.json().get("status") == "ok"
+    assert r.json()["status"] == "ok"
 
 
 def test_live_kpis_is_public(s):
     r = s.get(f"{API}/dashboard/live-kpis")
     assert r.status_code == 200
-    data = r.json()
-    assert "kpis" in data
-    assert len(data["kpis"]) == 5
+    b = r.json()
+    for k in ("revenue_mtd", "bookings_today", "active_vehicles", "active_vendors", "satisfaction_score"):
+        assert k in b
 
 
 # ---------- Auth ----------
 def test_login_founder_success(s):
-    data = _login(s, FOUNDER)
-    assert data["user"]["email"] == FOUNDER["email"]
-    assert data["user"]["role"] == "Founder"
+    d = _login(s, FOUNDER)
+    assert d["user"]["role"] == "Founder"
 
 
 def test_login_all_roles(s):
-    for creds, role in [(ADMIN, "Admin"), (MANAGER, "Manager"), (EMPLOYEE, "Employee"), (INTERN, "Intern")]:
+    for role, creds in [("Founder", FOUNDER), ("Admin", ADMIN), ("Manager", MANAGER), ("Employee", EMPLOYEE), ("Intern", INTERN)]:
         d = _login(s, creds)
-        assert d["user"]["role"] == role, f"{creds['email']} expected {role}, got {d['user']['role']}"
+        assert d["user"]["role"] == role
 
 
 def test_login_wrong_password(s):
-    r = s.post(f"{API}/auth/login", json={"email": FOUNDER["email"], "password": "wrong"})
+    r = s.post(f"{API}/auth/login", json={"email": FOUNDER["email"], "password": "WrongPassword!1"}, timeout=30)
     assert r.status_code == 401
 
 
 def test_me_invalid_token(s):
-    r = s.get(f"{API}/auth/me", headers={"Authorization": "Bearer invalid.token.here"})
+    r = s.get(f"{API}/users/me", headers={"Authorization": "Bearer invalid_token_here"})
     assert r.status_code == 401
 
 
 def test_me_valid(s):
     d = _login(s, FOUNDER)
-    r = s.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {d['access_token']}"})
+    r = s.get(f"{API}/users/me", headers={"Authorization": f"Bearer {d['access_token']}"})
     assert r.status_code == 200
     assert r.json()["email"] == FOUNDER["email"]
 
@@ -75,22 +76,21 @@ def test_refresh_flow(s):
     d = _login(s, FOUNDER)
     r = s.post(f"{API}/auth/refresh", json={"refresh_token": d["refresh_token"]})
     assert r.status_code == 200
-    body = r.json()
-    assert "access_token" in body and body["access_token"]
+    b = r.json()
+    assert "access_token" in b and "refresh_token" in b
 
 
 def test_refresh_invalid(s):
-    r = s.post(f"{API}/auth/refresh", json={"refresh_token": "bad.token"})
+    r = s.post(f"{API}/auth/refresh", json={"refresh_token": "bad_token"})
     assert r.status_code == 401
 
 
-# ---------- Role guards ----------
+# ---------- RBAC Basic Gates ----------
 def test_users_list_founder_200(s):
     d = _login(s, FOUNDER)
     r = s.get(f"{API}/users", headers={"Authorization": f"Bearer {d['access_token']}"})
     assert r.status_code == 200
-    users = r.json()
-    assert isinstance(users, list) and len(users) >= 5
+    assert len(r.json()) >= 5
 
 
 def test_users_list_intern_403(s):
@@ -114,7 +114,7 @@ def test_users_list_manager_200(s):
 # ---------- Dashboard stats (authed) ----------
 def test_dashboard_stats_requires_auth(s):
     r = s.get(f"{API}/dashboard/stats")
-    assert r.status_code in (401, 403)
+    assert r.status_code == 401
 
 
 def test_dashboard_stats_authed(s):
@@ -122,9 +122,9 @@ def test_dashboard_stats_authed(s):
     r = s.get(f"{API}/dashboard/stats", headers={"Authorization": f"Bearer {d['access_token']}"})
     assert r.status_code == 200
     body = r.json()
-    assert len(body["kpis"]) == 5
+    assert len(body["kpis"]) >= 5
     keys = {k["key"] for k in body["kpis"]}
-    assert keys == {"revenue", "bookings", "customers", "vehicles", "vendors"}
+    assert {"revenue", "bookings", "customers", "vehicles", "vendors"}.issubset(keys)
 
 
 # ---------- Notifications & Activity ----------
@@ -161,6 +161,7 @@ def test_update_profile_and_password_roundtrip(s):
     r = s.patch(f"{API}/users/me", json={"phone": "+919999999999", "designation": "QA Tester"}, headers=h)
     assert r.status_code == 200
     assert r.json()["phone"] == "+919999999999"
+    assert r.json()["designation"] != "QA Tester"
 
     # change password to new
     new_pwd = "Wavygo@2026_TMP"

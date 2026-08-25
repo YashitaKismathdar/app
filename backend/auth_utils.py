@@ -1,3 +1,4 @@
+from __future__ import annotations
 """JWT + password hashing + FastAPI dependencies for role-based auth."""
 import os
 import uuid

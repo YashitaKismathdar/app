@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Idempotent seed for role accounts, sample notifications & activity logs."""
 import os
 from datetime import timedelta

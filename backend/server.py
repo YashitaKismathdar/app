@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
@@ -29,6 +30,12 @@ logger = logging.getLogger("wavygo")
 app = FastAPI(title="WavyGo OS API", version="1.0.0")
 
 api = APIRouter(prefix="/api")
+
+
+@app.get("/")
+@app.head("/")
+async def root_head():
+    return {"service": "WavyGo OS API", "status": "ok"}
 
 
 @api.get("/")

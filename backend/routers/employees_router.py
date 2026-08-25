@@ -1,5 +1,7 @@
+from __future__ import annotations
 import secrets
 import string
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 from db import get_db
@@ -173,6 +175,10 @@ async def list_attendance(employee_id: str | None = None, date: str | None = Non
 async def add_attendance(payload: AttendanceIn, current: UserPublic = Depends(get_current_user)):
     db = get_db()
     doc = payload.model_dump()
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_local = datetime.now().strftime("%Y-%m-%d")
+    if doc["date"] not in (today_utc, today_local):
+        raise HTTPException(400, "Attendance can only be marked for today (neither past nor future dates allowed)")
     if current.role in ("Employee", "Intern") and doc["employee_id"] != current.id:
         raise HTTPException(403, "You can only mark your own attendance")
     if current.role == "Manager":
