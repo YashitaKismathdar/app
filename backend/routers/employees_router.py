@@ -50,11 +50,18 @@ async def list_employees(q: str | None = None, department: str | None = None, ro
 async def invite_employee(payload: EmployeeInviteIn,
                           current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
+    name = (payload.name or "").strip()
+    email = (payload.email or "").lower().strip()
+    if not name:
+        raise HTTPException(400, "Full name is required")
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "Please provide a valid email address")
+    if payload.role not in ("Admin", "Manager", "Employee", "Intern"):
+        raise HTTPException(400, "Invalid role specified")
     if payload.role == "Founder":
         raise HTTPException(403, "Cannot create another Founder")
     if payload.role == "Admin" and current.role != "Founder":
         raise HTTPException(403, "Only the Founder can create an Admin")
-    email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email is already registered as an employee")
     

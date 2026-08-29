@@ -50,6 +50,14 @@ function Directory() {
   const pendingInvs = useMemo(() => invitations.filter(i => i.status === "pending"), [invitations]);
 
   async function invite() {
+    if (!form.name || !form.name.trim()) {
+      toast.error("Please enter the teammate's full name");
+      return;
+    }
+    if (!form.email || !form.email.trim() || !form.email.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
     try {
       const { data } = await api.post("/employees/invite", form);
       toast.success(data.message || `Invitation email sent to ${form.email}`);
