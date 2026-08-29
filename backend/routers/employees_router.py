@@ -65,9 +65,11 @@ async def invite_employee(payload: EmployeeInviteIn,
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email is already registered as an employee")
     
+    frontend_url = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com").rstrip("/")
     existing_inv = await db.invitations.find_one({"email": email, "status": "pending"})
     if existing_inv:
         token = existing_inv["token"]
+        invite_url = f"{frontend_url}/accept-invite?token={token}"
         send_invitation_email(
             recipient_email=email,
             recipient_name=payload.name.strip(),
@@ -77,9 +79,10 @@ async def invite_employee(payload: EmployeeInviteIn,
             designation=payload.designation,
             department=payload.department
         )
-        return {**serialize(existing_inv), "token": token, "message": f"Invitation email resent to {email}"}
+        return {**serialize(existing_inv), "token": token, "invite_url": invite_url, "message": f"Invitation email resent to {email}"}
 
     token = secrets.token_urlsafe(32)
+    invite_url = f"{frontend_url}/accept-invite?token={token}"
     inv_doc = {
         "token": token,
         "email": email,
@@ -106,7 +109,7 @@ async def invite_employee(payload: EmployeeInviteIn,
     )
 
     await log_activity(db, current, "Sent employee invitation", "Employees", target=payload.name)
-    return {**serialize(inv_doc), "token": token, "message": f"Invitation email sent to {email}"}
+    return {**serialize(inv_doc), "token": token, "invite_url": invite_url, "message": f"Invitation email sent to {email}"}
 
 
 @router.get("/invitations")

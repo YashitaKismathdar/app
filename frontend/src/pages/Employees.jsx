@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
@@ -31,6 +31,9 @@ function Directory() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
   const [resetInfo, setResetInfo] = useState(null);
+
+  const [createdInvite, setCreatedInvite] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   async function load() {
     const { data } = await api.get("/employees");
@@ -60,11 +63,18 @@ function Directory() {
     }
     try {
       const { data } = await api.post("/employees/invite", form);
+      const url = data.invite_url || `${window.location.origin}/accept-invite?token=${data.token}`;
+      setCreatedInvite({ ...data, invite_url: url });
       toast.success(data.message || `Invitation email sent to ${form.email}`);
-      setForm({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
-      setOpen(false);
       load();
     } catch (e) { toast.error(formatApiError(e)); }
+  }
+
+  function copyInviteUrl(url) {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    toast.success("Invitation link copied to clipboard!");
+    setTimeout(() => setCopied(false), 2500);
   }
 
   async function resendInvite(inv) {
@@ -86,7 +96,7 @@ function Directory() {
     <>
       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-4">
         <Input placeholder="Search by name, email, role, department…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" data-testid="employee-search" />
-        {canInvite && <Button onClick={() => setOpen(true)} data-testid="employee-invite-btn"><UserPlus className="h-4 w-4 mr-1.5" /> Invite teammate</Button>}
+        {canInvite && <Button onClick={() => { setCreatedInvite(null); setForm({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" }); setOpen(true); }} data-testid="employee-invite-btn"><UserPlus className="h-4 w-4 mr-1.5" /> Invite teammate</Button>}
       </div>
 
       {pendingInvs.length > 0 && (
@@ -98,18 +108,26 @@ function Directory() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="divide-y divide-amber-500/10">
-              {pendingInvs.map(inv => (
-                <div key={inv.id} className="py-2.5 flex items-center justify-between gap-4 text-xs">
-                  <div>
-                    <span className="font-medium text-foreground">{inv.name}</span>
-                    <span className="text-muted-foreground ml-2">({inv.email})</span>
-                    <Badge variant="outline" className="ml-2 text-[10px] uppercase">{inv.role}</Badge>
+              {pendingInvs.map(inv => {
+                const link = inv.invite_url || `${window.location.origin}/accept-invite?token=${inv.token}`;
+                return (
+                  <div key={inv.id} className="py-2.5 flex items-center justify-between gap-4 text-xs">
+                    <div>
+                      <span className="font-medium text-foreground">{inv.name}</span>
+                      <span className="text-muted-foreground ml-2">({inv.email})</span>
+                      <Badge variant="outline" className="ml-2 text-[10px] uppercase">{inv.role}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copyInviteUrl(link)}>
+                        <Copy className="h-3 w-3 mr-1" /> Copy Link
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10" onClick={() => resendInvite(inv)}>
+                        Resend Email
+                      </Button>
+                    </div>
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10" onClick={() => resendInvite(inv)}>
-                    Resend Email
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -159,33 +177,66 @@ function Directory() {
         )}
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setCreatedInvite(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-display">Invite teammate</DialogTitle>
-            <DialogDescription>An invitation email will be sent to the employee. They will be added to the directory once they accept.</DialogDescription>
+            <DialogTitle className="font-display">{createdInvite ? "Invitation Sent & Link Generated" : "Invite teammate"}</DialogTitle>
+            <DialogDescription>
+              {createdInvite
+                ? "An email was dispatched via Brevo. You can also copy and share the direct invitation link below."
+                : "An invitation email will be sent to the employee. They will be added to the directory once they accept."}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Full name</Label><Input value={form.name} onChange={(e) => setForm(s => ({ ...s, name: e.target.value }))} data-testid="invite-name-input" /></div>
-            <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm(s => ({ ...s, email: e.target.value }))} data-testid="invite-email-input" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Role</Label>
-                <Select value={form.role} onValueChange={(v) => setForm(s => ({ ...s, role: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["Admin","Manager","Employee","Intern"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-                </Select>
+
+          {createdInvite ? (
+            <div className="space-y-4 my-2">
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Invitation Link</span>
+                  <Badge variant="outline" className="text-[10px] bg-blue-500/20 text-blue-300 border-blue-500/30">Active</Badge>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Share this link directly with <strong className="text-foreground">{createdInvite.name}</strong> ({createdInvite.email}) via WhatsApp, Slack, or SMS:
+                </div>
+                <div className="p-2.5 rounded bg-background border border-border font-mono text-[11.5px] break-all text-foreground select-all">
+                  {createdInvite.invite_url}
+                </div>
+                <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium" onClick={() => copyInviteUrl(createdInvite.invite_url)}>
+                  {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                  {copied ? "Link Copied!" : "Copy Invitation Link"}
+                </Button>
               </div>
-              <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm(s => ({ ...s, phone: e.target.value }))} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Designation</Label><Input value={form.designation} onChange={(e) => setForm(s => ({ ...s, designation: e.target.value }))} /></div>
-              <div><Label>Department</Label><Input value={form.department} onChange={(e) => setForm(s => ({ ...s, department: e.target.value }))} /></div>
+          ) : (
+            <div className="space-y-3">
+              <div><Label>Full name</Label><Input value={form.name} onChange={(e) => setForm(s => ({ ...s, name: e.target.value }))} data-testid="invite-name-input" /></div>
+              <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm(s => ({ ...s, email: e.target.value }))} data-testid="invite-email-input" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Role</Label>
+                  <Select value={form.role} onValueChange={(v) => setForm(s => ({ ...s, role: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{["Admin","Manager","Employee","Intern"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm(s => ({ ...s, phone: e.target.value }))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Designation</Label><Input value={form.designation} onChange={(e) => setForm(s => ({ ...s, designation: e.target.value }))} /></div>
+                <div><Label>Department</Label><Input value={form.department} onChange={(e) => setForm(s => ({ ...s, department: e.target.value }))} /></div>
+              </div>
             </div>
-          </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={invite} data-testid="invite-submit-btn">Send invitation email</Button>
+            {createdInvite ? (
+              <Button onClick={() => { setOpen(false); setCreatedInvite(null); }}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={invite} data-testid="invite-submit-btn">Send invitation email</Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
