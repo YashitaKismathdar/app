@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from bson import ObjectId
+from dotenv import load_dotenv
+load_dotenv()
 
 from db import get_db, utc_now
 from auth_utils import hash_password
