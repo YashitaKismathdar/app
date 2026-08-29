@@ -3,7 +3,7 @@ import os
 import secrets
 import string
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from bson import ObjectId
 from db import get_db
 from auth_utils import get_current_user, require_roles, hash_password
@@ -49,6 +49,7 @@ async def list_employees(q: str | None = None, department: str | None = None, ro
 
 @router.post("/invite", status_code=201)
 async def invite_employee(payload: EmployeeInviteIn,
+                          background_tasks: BackgroundTasks,
                           current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
     name = (payload.name or "").strip()
@@ -66,12 +67,14 @@ async def invite_employee(payload: EmployeeInviteIn,
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email is already registered as an employee")
     
+    default_pw = "Wavygo@2026"
     frontend_url = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com").rstrip("/")
     existing_inv = await db.invitations.find_one({"email": email, "status": "pending"})
     if existing_inv:
         token = existing_inv["token"]
         invite_url = f"{frontend_url}/accept-invite?token={token}"
-        send_invitation_email(
+        background_tasks.add_task(
+            send_invitation_email,
             recipient_email=email,
             recipient_name=payload.name.strip(),
             role=payload.role,
@@ -80,7 +83,13 @@ async def invite_employee(payload: EmployeeInviteIn,
             designation=payload.designation,
             department=payload.department
         )
-        return {**serialize(existing_inv), "token": token, "invite_url": invite_url, "message": f"Invitation email resent to {email}"}
+        return {
+            **serialize(existing_inv),
+            "token": token,
+            "invite_url": invite_url,
+            "temp_password": default_pw,
+            "message": f"Invitation email is being sent to {email}"
+        }
 
     token = secrets.token_urlsafe(32)
     invite_url = f"{frontend_url}/accept-invite?token={token}"
@@ -99,7 +108,8 @@ async def invite_employee(payload: EmployeeInviteIn,
     res = await db.invitations.insert_one(inv_doc)
     inv_doc["_id"] = res.inserted_id
 
-    send_invitation_email(
+    background_tasks.add_task(
+        send_invitation_email,
         recipient_email=email,
         recipient_name=payload.name.strip(),
         role=payload.role,
@@ -110,7 +120,13 @@ async def invite_employee(payload: EmployeeInviteIn,
     )
 
     await log_activity(db, current, "Sent employee invitation", "Employees", target=payload.name)
-    return {**serialize(inv_doc), "token": token, "invite_url": invite_url, "message": f"Invitation email sent to {email}"}
+    return {
+        **serialize(inv_doc),
+        "token": token,
+        "invite_url": invite_url,
+        "temp_password": default_pw,
+        "message": f"Invitation email is being sent to {email}"
+    }
 
 
 @router.get("/invitations")
@@ -183,13 +199,14 @@ async def accept_invite(payload: dict):
 
 
 @router.post("/invitations/{invite_id}/resend")
-async def resend_invitation(invite_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
     inv = await db.invitations.find_one({"_id": oid(invite_id), "status": "pending"})
     if not inv:
         raise HTTPException(404, "Pending invitation not found")
     
-    send_invitation_email(
+    background_tasks.add_task(
+        send_invitation_email,
         recipient_email=inv["email"],
         recipient_name=inv["name"],
         role=inv["role"],
@@ -198,7 +215,7 @@ async def resend_invitation(invite_id: str, current: UserPublic = Depends(requir
         designation=inv.get("designation"),
         department=inv.get("department")
     )
-    return {"ok": True, "message": f"Invitation email resent to {inv['email']}"}
+    return {"ok": True, "message": f"Invitation email is being resent to {inv['email']}"}
 
 
 @router.post("/{employee_id}/reset-password")
