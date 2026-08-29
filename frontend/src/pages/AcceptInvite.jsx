@@ -56,8 +56,12 @@ export default function AcceptInvite() {
     setSubmitting(true);
     try {
       await api.post("/employees/accept-invite", { token, password });
-      toast.success("Invitation accepted! Welcome to the team.");
+      toast.success("Invitation accepted! Redirecting to login page...");
       setAccepted(true);
+      setTimeout(() => {
+        const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
+        navigate(`/login${targetEmail ? `?email=${targetEmail}` : ""}`);
+      }, 1500);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -104,12 +108,15 @@ export default function AcceptInvite() {
             <div className="space-y-1">
               <h2 className="font-display text-2xl font-bold text-white">Invitation Accepted!</h2>
               <p className="text-sm text-slate-400">
-                Your account is now activated. You are officially part of the WavyGo team and listed in the employee directory.
+                Your account is activated and credentials added. Redirecting you to the login page…
               </p>
             </div>
             <Button
               className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium h-11"
-              onClick={() => navigate("/login")}
+              onClick={() => {
+                const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
+                navigate(`/login${targetEmail ? `?email=${targetEmail}` : ""}`);
+              }}
             >
               Sign In to Your Workspace <ArrowRight className="w-4 h-4 ml-2" />
             </Button>

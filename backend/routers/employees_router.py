@@ -68,35 +68,36 @@ async def invite_employee(payload: EmployeeInviteIn,
         raise HTTPException(409, "Email is already registered as an employee")
     
     default_pw = "Wavygo@2026"
+    default_pw = "Wavygo@2026"
     frontend_url = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com").rstrip("/")
-    existing_inv = await db.invitations.find_one({"email": email, "status": "pending"})
-    if existing_inv:
-        token = existing_inv["token"]
-        invite_url = f"{frontend_url}/accept-invite?token={token}"
-        background_tasks.add_task(
-            send_invitation_email,
-            recipient_email=email,
-            recipient_name=payload.name.strip(),
-            role=payload.role,
-            token=token,
-            invited_by=current.name,
-            designation=payload.designation,
-            department=payload.department
-        )
-        return {
-            **serialize(existing_inv),
-            "token": token,
-            "invite_url": invite_url,
-            "temp_password": default_pw,
-            "message": f"Invitation email is being sent to {email}"
-        }
+    
+    existing_user = await db.users.find_one({"email": email})
+    if existing_user:
+        raise HTTPException(409, "Email is already registered as an employee")
 
+    # Insert employee into db.users immediately so they appear in Employee Directory
+    user_doc = {
+        "email": email,
+        "name": name,
+        "role": payload.role,
+        "designation": payload.designation,
+        "department": payload.department,
+        "phone": payload.phone,
+        "password_hash": hash_password(default_pw),
+        "online": False,
+        "created_at": utc_iso(),
+        "updated_at": utc_iso(),
+    }
+    user_res = await db.users.insert_one(user_doc)
+    user_doc["_id"] = user_res.inserted_id
+
+    # Create invitation token & record
     token = secrets.token_urlsafe(32)
     invite_url = f"{frontend_url}/accept-invite?token={token}"
     inv_doc = {
         "token": token,
         "email": email,
-        "name": payload.name.strip(),
+        "name": name,
         "role": payload.role,
         "designation": payload.designation,
         "department": payload.department,
@@ -105,13 +106,14 @@ async def invite_employee(payload: EmployeeInviteIn,
         "invited_by": current.name,
         "created_at": utc_iso(),
     }
+    await db.invitations.delete_many({"email": email})
     res = await db.invitations.insert_one(inv_doc)
     inv_doc["_id"] = res.inserted_id
 
     background_tasks.add_task(
         send_invitation_email,
         recipient_email=email,
-        recipient_name=payload.name.strip(),
+        recipient_name=name,
         role=payload.role,
         token=token,
         invited_by=current.name,
@@ -119,13 +121,13 @@ async def invite_employee(payload: EmployeeInviteIn,
         department=payload.department
     )
 
-    await log_activity(db, current, "Sent employee invitation", "Employees", target=payload.name)
+    await log_activity(db, current, "Added employee & sent invitation", "Employees", target=name)
     return {
-        **serialize(inv_doc),
+        **serialize(user_doc),
         "token": token,
         "invite_url": invite_url,
         "temp_password": default_pw,
-        "message": f"Invitation email is being sent to {email}"
+        "message": f"Employee added & invitation sent to {email}"
     }
 
 
@@ -169,23 +171,34 @@ async def accept_invite(payload: dict):
         raise HTTPException(404, "Invalid or expired invitation link")
     
     email = inv["email"].lower().strip()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(400, "An account with this email already exists")
-
-    user_doc = {
-        "email": email,
-        "name": inv["name"],
-        "role": inv["role"],
-        "designation": inv.get("designation"),
-        "department": inv.get("department"),
-        "phone": inv.get("phone"),
-        "password_hash": hash_password(password),
-        "online": False,
-        "created_at": utc_iso(),
-        "updated_at": utc_iso(),
-    }
-    res = await db.users.insert_one(user_doc)
-    user_doc["_id"] = res.inserted_id
+    existing_user = await db.users.find_one({"email": email})
+    if existing_user:
+        await db.users.update_one(
+            {"_id": existing_user["_id"]},
+            {"$set": {
+                "password_hash": hash_password(password),
+                "name": inv["name"],
+                "role": inv["role"],
+                "designation": inv.get("designation"),
+                "department": inv.get("department"),
+                "phone": inv.get("phone"),
+                "updated_at": utc_iso()
+            }}
+        )
+    else:
+        user_doc = {
+            "email": email,
+            "name": inv["name"],
+            "role": inv["role"],
+            "designation": inv.get("designation"),
+            "department": inv.get("department"),
+            "phone": inv.get("phone"),
+            "password_hash": hash_password(password),
+            "online": False,
+            "created_at": utc_iso(),
+            "updated_at": utc_iso(),
+        }
+        await db.users.insert_one(user_doc)
 
     await db.invitations.update_one(
         {"_id": inv["_id"]},
