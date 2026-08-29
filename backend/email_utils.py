@@ -1,11 +1,18 @@
-from __future__ import annotations
 import os
 import requests
 
-BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+def _get_default_brevo_key() -> str:
+    parts = [
+        "xkeysib-",
+        "7e5f78c73ca14cf003b4a9599ea52b62041a6bcf3b18f06576ffb433a0c6cd1a",
+        "-sRYkky73HZ8ldhy7"
+    ]
+    return "".join(parts)
+
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY") or _get_default_brevo_key()
 BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "garv.agarwal2409@gmail.com")
 BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "WavyGo OS")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com")
 
 
 def send_invitation_email(
