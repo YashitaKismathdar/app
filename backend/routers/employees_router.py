@@ -9,6 +9,7 @@ from auth_utils import get_current_user, require_roles, hash_password
 from models import UserPublic
 from models_part2 import DepartmentIn, EmployeeInviteIn, AttendanceIn, LeaveIn, PerformanceIn
 from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, notify
+from email_utils import send_invitation_email
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -55,26 +56,138 @@ async def invite_employee(payload: EmployeeInviteIn,
         raise HTTPException(403, "Only the Founder can create an Admin")
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
-        raise HTTPException(409, "Email already exists")
-    default_pw = "Wavygo@2026"
-    doc = {
+        raise HTTPException(409, "Email is already registered as an employee")
+    
+    existing_inv = await db.invitations.find_one({"email": email, "status": "pending"})
+    if existing_inv:
+        token = existing_inv["token"]
+        send_invitation_email(
+            recipient_email=email,
+            recipient_name=payload.name.strip(),
+            role=payload.role,
+            token=token,
+            invited_by=current.name,
+            designation=payload.designation,
+            department=payload.department
+        )
+        return {**serialize(existing_inv), "token": token, "message": f"Invitation email resent to {email}"}
+
+    token = secrets.token_urlsafe(32)
+    inv_doc = {
+        "token": token,
         "email": email,
         "name": payload.name.strip(),
         "role": payload.role,
         "designation": payload.designation,
         "department": payload.department,
         "phone": payload.phone,
-        "password_hash": hash_password(default_pw),
+        "status": "pending",
+        "invited_by": current.name,
+        "created_at": utc_iso(),
+    }
+    res = await db.invitations.insert_one(inv_doc)
+    inv_doc["_id"] = res.inserted_id
+
+    send_invitation_email(
+        recipient_email=email,
+        recipient_name=payload.name.strip(),
+        role=payload.role,
+        token=token,
+        invited_by=current.name,
+        designation=payload.designation,
+        department=payload.department
+    )
+
+    await log_activity(db, current, "Sent employee invitation", "Employees", target=payload.name)
+    return {**serialize(inv_doc), "token": token, "message": f"Invitation email sent to {email}"}
+
+
+@router.get("/invitations")
+async def list_invitations(current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+    db = get_db()
+    docs = await db.invitations.find().sort("created_at", -1).to_list(500)
+    return serialize_many(docs)
+
+
+@router.get("/invite/{token}")
+async def get_invite_details(token: str):
+    db = get_db()
+    inv = await db.invitations.find_one({"token": token, "status": "pending"})
+    if not inv:
+        raise HTTPException(404, "Invalid or expired invitation link")
+    return {
+        "email": inv["email"],
+        "name": inv["name"],
+        "role": inv["role"],
+        "designation": inv.get("designation"),
+        "department": inv.get("department"),
+        "phone": inv.get("phone"),
+        "invited_by": inv.get("invited_by"),
+        "status": inv["status"],
+    }
+
+
+@router.post("/accept-invite")
+async def accept_invite(payload: dict):
+    token = payload.get("token")
+    password = payload.get("password")
+    if not token or not password:
+        raise HTTPException(400, "Token and password are required")
+    if len(password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters long")
+    
+    db = get_db()
+    inv = await db.invitations.find_one({"token": token, "status": "pending"})
+    if not inv:
+        raise HTTPException(404, "Invalid or expired invitation link")
+    
+    email = inv["email"].lower().strip()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(400, "An account with this email already exists")
+
+    user_doc = {
+        "email": email,
+        "name": inv["name"],
+        "role": inv["role"],
+        "designation": inv.get("designation"),
+        "department": inv.get("department"),
+        "phone": inv.get("phone"),
+        "password_hash": hash_password(password),
         "online": False,
         "created_at": utc_iso(),
         "updated_at": utc_iso(),
     }
-    res = await db.users.insert_one(doc)
-    doc["_id"] = res.inserted_id
-    await log_activity(db, current, "Invited employee", "Employees", target=payload.name)
-    await notify(db, None, "New teammate joined", f"{payload.name} was invited by {current.name} as {payload.role}.",
+    res = await db.users.insert_one(user_doc)
+    user_doc["_id"] = res.inserted_id
+
+    await db.invitations.update_one(
+        {"_id": inv["_id"]},
+        {"$set": {"status": "accepted", "accepted_at": utc_iso()}}
+    )
+
+    await notify(db, None, "New teammate joined", f"{inv['name']} accepted the invitation and joined as {inv['role']}.",
                  kind="success", link="/employees")
-    return {**serialize(doc), "temp_password": default_pw}
+    
+    return {"ok": True, "email": email, "message": "Invitation accepted successfully! You can now log in."}
+
+
+@router.post("/invitations/{invite_id}/resend")
+async def resend_invitation(invite_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    db = get_db()
+    inv = await db.invitations.find_one({"_id": oid(invite_id), "status": "pending"})
+    if not inv:
+        raise HTTPException(404, "Pending invitation not found")
+    
+    send_invitation_email(
+        recipient_email=inv["email"],
+        recipient_name=inv["name"],
+        role=inv["role"],
+        token=inv["token"],
+        invited_by=current.name,
+        designation=inv.get("designation"),
+        department=inv.get("department")
+    )
+    return {"ok": True, "message": f"Invitation email resent to {inv['email']}"}
 
 
 @router.post("/{employee_id}/reset-password")

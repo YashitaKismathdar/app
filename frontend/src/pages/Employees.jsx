@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
@@ -26,15 +26,18 @@ function Directory() {
   const canInvite = can("employee.invite");
   const canReset = can("auth.reset_other_password");
   const [rows, setRows] = useState([]);
+  const [invitations, setInvitations] = useState([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
-  const [tempPw, setTempPw] = useState(null);
   const [resetInfo, setResetInfo] = useState(null);
 
   async function load() {
     const { data } = await api.get("/employees");
     setRows(data);
+    if (canInvite) {
+      api.get("/employees/invitations").then(({ data: invs }) => setInvitations(invs)).catch(() => {});
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -44,13 +47,22 @@ function Directory() {
     return rows.filter(r => (r.name + r.email + (r.designation || "") + (r.department || "")).toLowerCase().includes(t));
   }, [rows, q]);
 
+  const pendingInvs = useMemo(() => invitations.filter(i => i.status === "pending"), [invitations]);
+
   async function invite() {
     try {
       const { data } = await api.post("/employees/invite", form);
-      setTempPw({ email: form.email, password: data.temp_password });
-      toast.success("Teammate invited");
+      toast.success(data.message || `Invitation email sent to ${form.email}`);
       setForm({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
+      setOpen(false);
       load();
+    } catch (e) { toast.error(formatApiError(e)); }
+  }
+
+  async function resendInvite(inv) {
+    try {
+      const { data } = await api.post(`/employees/invitations/${inv.id}/resend`);
+      toast.success(data.message || `Invitation email resent to ${inv.email}`);
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
@@ -68,6 +80,32 @@ function Directory() {
         <Input placeholder="Search by name, email, role, department…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" data-testid="employee-search" />
         {canInvite && <Button onClick={() => setOpen(true)} data-testid="employee-invite-btn"><UserPlus className="h-4 w-4 mr-1.5" /> Invite teammate</Button>}
       </div>
+
+      {pendingInvs.length > 0 && (
+        <Card className="border-amber-500/20 bg-amber-500/5 mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+              <Mail className="h-4 w-4" /> Pending Invitations ({pendingInvs.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="divide-y divide-amber-500/10">
+              {pendingInvs.map(inv => (
+                <div key={inv.id} className="py-2.5 flex items-center justify-between gap-4 text-xs">
+                  <div>
+                    <span className="font-medium text-foreground">{inv.name}</span>
+                    <span className="text-muted-foreground ml-2">({inv.email})</span>
+                    <Badge variant="outline" className="ml-2 text-[10px] uppercase">{inv.role}</Badge>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10" onClick={() => resendInvite(inv)}>
+                    Resend Email
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border">
         {filtered.length === 0 ? <EmptyState icon={Users} title="No employees match" /> : (
@@ -117,7 +155,7 @@ function Directory() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display">Invite teammate</DialogTitle>
-            <DialogDescription>They'll be created with a temporary password. Share it securely.</DialogDescription>
+            <DialogDescription>An invitation email will be sent to the employee. They will be added to the directory once they accept.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div><Label>Full name</Label><Input value={form.name} onChange={(e) => setForm(s => ({ ...s, name: e.target.value }))} data-testid="invite-name-input" /></div>
@@ -136,15 +174,10 @@ function Directory() {
               <div><Label>Designation</Label><Input value={form.designation} onChange={(e) => setForm(s => ({ ...s, designation: e.target.value }))} /></div>
               <div><Label>Department</Label><Input value={form.department} onChange={(e) => setForm(s => ({ ...s, department: e.target.value }))} /></div>
             </div>
-            {tempPw && (
-              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-[12.5px]">
-                Temporary password for <span className="font-medium">{tempPw.email}</span>: <span className="font-mono font-semibold">{tempPw.password}</span>
-              </div>
-            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setOpen(false); setTempPw(null); }}>Close</Button>
-            <Button onClick={invite} data-testid="invite-submit-btn">Send invite</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={invite} data-testid="invite-submit-btn">Send invitation email</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
