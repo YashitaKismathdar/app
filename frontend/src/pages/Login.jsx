@@ -27,7 +27,9 @@ export default function Login() {
   const { user, login } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
-  const [email, setEmail] = useState("");
+  const queryParams = new URLSearchParams(loc.search);
+  const prefilledEmail = queryParams.get("email") || loc.state?.email || "";
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [showPw, setShowPw] = useState(false);
