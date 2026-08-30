@@ -202,29 +202,13 @@ function Directory() {
 
           {createdInvite ? (
             <div className="space-y-3 my-2">
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Default Temporary Password</span>
-                  <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/30 font-mono">Default</Badge>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Temporary login password for <strong className="text-foreground">{createdInvite.email}</strong>:
-                </div>
-                <div className="flex items-center justify-between p-2 rounded bg-background border border-border">
-                  <span className="font-mono font-bold text-sm text-foreground">{createdInvite.temp_password || "Wavygo@2026"}</span>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { navigator.clipboard.writeText(createdInvite.temp_password || "Wavygo@2026"); toast.success("Temporary password copied!"); }}>
-                    <Copy className="h-3.5 w-3.5 mr-1" /> Copy Password
-                  </Button>
-                </div>
-              </div>
-
               <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Invitation Link</span>
                   <Badge variant="outline" className="text-[10px] bg-blue-500/20 text-blue-300 border-blue-500/30">Active</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Share this link directly with <strong className="text-foreground">{createdInvite.name}</strong> to let them set their own password & accept:
+                  Share this link directly with <strong className="text-foreground">{createdInvite.name}</strong> to let them set their password & accept:
                 </div>
                 <div className="p-2.5 rounded bg-background border border-border font-mono text-[11px] break-all text-foreground select-all">
                   {createdInvite.invite_url}

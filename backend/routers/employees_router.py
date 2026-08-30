@@ -65,36 +65,13 @@ async def invite_employee(payload: EmployeeInviteIn,
         raise HTTPException(403, "Cannot create another Founder")
     if payload.role == "Admin" and current.role != "Founder":
         raise HTTPException(403, "Only the Founder can create an Admin")
-    if await db.users.find_one({"email": email}):
+    if await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}):
         raise HTTPException(409, "Email is already registered as an employee")
     
-    default_pw = "Wavygo@2026"
-    default_pw = "Wavygo@2026"
     frontend_url = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com").rstrip("/")
-    
-    existing_user = await db.users.find_one({"email": email})
-    if existing_user:
-        raise HTTPException(409, "Email is already registered as an employee")
-
-    # Insert employee into db.users immediately so they appear in Employee Directory
-    user_doc = {
-        "email": email,
-        "name": name,
-        "role": payload.role,
-        "designation": payload.designation,
-        "department": payload.department,
-        "phone": payload.phone,
-        "password_hash": hash_password(default_pw),
-        "online": False,
-        "created_at": utc_iso(),
-        "updated_at": utc_iso(),
-    }
-    user_res = await db.users.insert_one(user_doc)
-    user_doc["_id"] = user_res.inserted_id
-
-    # Create invitation token & record
     token = secrets.token_urlsafe(32)
     invite_url = f"{frontend_url}/accept-invite?token={token}"
+
     inv_doc = {
         "token": token,
         "email": email,
@@ -122,13 +99,12 @@ async def invite_employee(payload: EmployeeInviteIn,
         department=payload.department
     )
 
-    await log_activity(db, current, "Added employee & sent invitation", "Employees", target=name)
+    await log_activity(db, current, "Sent employee invitation", "Employees", target=name)
     return {
-        **serialize(user_doc),
+        **serialize(inv_doc),
         "token": token,
         "invite_url": invite_url,
-        "temp_password": default_pw,
-        "message": f"Employee added & invitation sent to {email}"
+        "message": f"Invitation email sent to {email}"
     }
 
 
@@ -172,7 +148,7 @@ async def accept_invite(payload: dict):
         raise HTTPException(404, "Invalid or expired invitation link")
     
     email = inv["email"].lower().strip()
-    existing_user = await db.users.find_one({"email": email})
+    existing_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
     if existing_user:
         await db.users.update_one(
             {"_id": existing_user["_id"]},
