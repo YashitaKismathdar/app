@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import re
 import secrets
 import string
 from datetime import datetime, timezone
@@ -229,6 +230,22 @@ async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, c
         department=inv.get("department")
     )
     return {"ok": True, "message": f"Invitation email is being resent to {inv['email']}"}
+
+
+@router.delete("/invitations/{invite_id}", status_code=200)
+async def delete_invitation(invite_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    db = get_db()
+    inv = await db.invitations.find_one({"_id": oid(invite_id)})
+    if not inv:
+        raise HTTPException(404, "Pending invitation not found")
+    
+    email = inv.get("email", "").lower().strip()
+    await db.invitations.delete_one({"_id": inv["_id"]})
+    if email:
+        await db.users.delete_many({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+        
+    await log_activity(db, current, "Deleted pending invitation", "Employees", target=email)
+    return {"ok": True, "message": f"Pending invitation for {email} deleted successfully"}
 
 
 @router.post("/{employee_id}/reset-password")

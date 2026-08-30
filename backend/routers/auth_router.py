@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from bson import ObjectId
 
@@ -43,7 +44,7 @@ async def _log_activity(db, user, action: str, module: str = "Auth", target: str
 async def login(payload: LoginRequest, request: Request):
     db = get_db()
     email = payload.email.lower().strip()
-    user = await db.users.find_one({"email": email})
+    user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 

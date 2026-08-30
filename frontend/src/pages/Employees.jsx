@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check, Trash2 } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
@@ -84,6 +84,15 @@ function Directory() {
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
+  async function deleteInvite(inv) {
+    if (!window.confirm(`Are you sure you want to delete the pending invitation for ${inv.email}?`)) return;
+    try {
+      const { data } = await api.delete(`/employees/invitations/${inv.id}`);
+      toast.success(data.message || "Pending invitation deleted");
+      load();
+    } catch (e) { toast.error(formatApiError(e)); }
+  }
+
   async function resetPassword(u) {
     try {
       const { data } = await api.post(`/employees/${u.id}/reset-password`);
@@ -123,6 +132,9 @@ function Directory() {
                       </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10" onClick={() => resendInvite(inv)}>
                         Resend Email
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10" onClick={() => deleteInvite(inv)}>
+                        <Trash2 className="h-3 w-3 mr-1" /> Delete
                       </Button>
                     </div>
                   </div>
