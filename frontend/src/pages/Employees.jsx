@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check, Trash2 } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check, Trash2, Pencil } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
@@ -24,6 +24,7 @@ function initials(name) {
 function Directory() {
   const { can } = usePermission();
   const canInvite = can("employee.invite");
+  const canEdit = can("employee.edit");
   const canReset = can("auth.reset_other_password");
   const [rows, setRows] = useState([]);
   const [invitations, setInvitations] = useState([]);
@@ -31,6 +32,8 @@ function Directory() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
   const [resetInfo, setResetInfo] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", role: "Employee", designation: "", department: "", phone: "" });
 
   const [createdInvite, setCreatedInvite] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -101,6 +104,27 @@ function Directory() {
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
+  function startEdit(u) {
+    setEditingUser(u);
+    setEditForm({
+      name: u.name || "",
+      role: u.role || "Employee",
+      designation: u.designation || "",
+      department: u.department || "",
+      phone: u.phone || ""
+    });
+  }
+
+  async function saveEdit() {
+    if (!editingUser) return;
+    try {
+      const { data } = await api.patch(`/employees/${editingUser.id}`, editForm);
+      toast.success(`Updated profile for ${data.name || editingUser.name}`);
+      setEditingUser(null);
+      load();
+    } catch (e) { toast.error(formatApiError(e)); }
+  }
+
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-4">
@@ -156,7 +180,7 @@ function Directory() {
                 <TableHead>Department</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
-                {canReset && <TableHead className="text-right">Actions</TableHead>}
+                {(canEdit || canReset) && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -173,13 +197,20 @@ function Directory() {
                   <TableCell className="text-[13px]">{u.department || "—"}</TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">{u.phone || "—"}</TableCell>
                   <TableCell><StatusPill status={u.online ? "active" : "paused"} /></TableCell>
-                  {canReset && (
+                  {(canEdit || canReset) && (
                     <TableCell className="text-right">
-                      {u.role !== "Founder" && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetPassword(u)} data-testid={`reset-password-btn-${u.id}`}>
-                          <KeyRound className="h-3.5 w-3.5 mr-1" /> Reset password
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {canEdit && u.role !== "Founder" && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => startEdit(u)} data-testid={`edit-employee-btn-${u.id}`}>
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                          </Button>
+                        )}
+                        {canReset && u.role !== "Founder" && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetPassword(u)} data-testid={`reset-password-btn-${u.id}`}>
+                            <KeyRound className="h-3.5 w-3.5 mr-1" /> Reset password
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>
@@ -256,15 +287,45 @@ function Directory() {
       <Dialog open={!!resetInfo} onOpenChange={(v) => !v && setResetInfo(null)}>
         <DialogContent data-testid="reset-password-dialog">
           <DialogHeader>
-            <DialogTitle className="font-display">Password reset</DialogTitle>
-            <DialogDescription>Share this temporary password securely. It is shown only once.</DialogDescription>
+            <DialogTitle className="font-display">Temporary Password Generated</DialogTitle>
+            <DialogDescription>Share this temporary password with {resetInfo?.email}. They should sign in and update their password if permitted.</DialogDescription>
           </DialogHeader>
-          {resetInfo && (
-            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-[12.5px]">
-              Temporary password for <span className="font-medium">{resetInfo.email}</span>: <span className="font-mono font-semibold" data-testid="reset-temp-password">{resetInfo.password}</span>
+          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 text-center font-mono text-lg tracking-wider font-bold text-amber-400 select-all my-2">
+            {resetInfo?.password}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResetInfo(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingUser} onOpenChange={(v) => !v && setEditingUser(null)}>
+        <DialogContent data-testid="edit-employee-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Edit Teammate Profile</DialogTitle>
+            <DialogDescription>Update role, designation, department, and contact information for {editingUser?.name}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Full name</Label><Input value={editForm.name} onChange={(e) => setEditForm(s => ({ ...s, name: e.target.value }))} data-testid="edit-name-input" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Role</Label>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm(s => ({ ...s, role: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{["Admin","Manager","Employee","Intern"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Phone</Label><Input value={editForm.phone} onChange={(e) => setEditForm(s => ({ ...s, phone: e.target.value }))} /></div>
             </div>
-          )}
-          <DialogFooter><Button onClick={() => setResetInfo(null)}>Done</Button></DialogFooter>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Designation</Label><Input value={editForm.designation} onChange={(e) => setEditForm(s => ({ ...s, designation: e.target.value }))} /></div>
+              <div><Label>Department</Label><Input value={editForm.department} onChange={(e) => setEditForm(s => ({ ...s, department: e.target.value }))} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
+            <Button onClick={saveEdit} data-testid="edit-employee-save-btn">Save Changes</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
