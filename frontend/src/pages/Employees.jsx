@@ -23,9 +23,7 @@ function initials(name) {
 
 function getInviteLink(token) {
   if (!token) return "";
-  const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://app-eta-flax-97.vercel.app";
-  const base = origin.includes("emergentagent.com") || origin.includes("localhost") ? "https://app-eta-flax-97.vercel.app" : origin;
-  return `${base}/accept-invite?token=${token}`;
+  return `https://app-eta-flax-97.vercel.app/accept-invite?token=${token}`;
 }
 
 function Directory() {
