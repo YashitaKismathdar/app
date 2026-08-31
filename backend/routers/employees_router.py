@@ -68,7 +68,11 @@ async def invite_employee(payload: EmployeeInviteIn,
     if await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}):
         raise HTTPException(409, "Email is already registered as an employee")
     
-    frontend_url = os.environ.get("FRONTEND_URL", "https://app-eta-flax-97.vercel.app").rstrip("/")
+    env_frontend = os.environ.get("FRONTEND_URL", "")
+    if not env_frontend or "emergentagent.com" in env_frontend or "preview" in env_frontend:
+        frontend_url = "https://app-eta-flax-97.vercel.app"
+    else:
+        frontend_url = env_frontend.rstrip("/")
     token = secrets.token_urlsafe(32)
     invite_url = f"{frontend_url}/accept-invite?token={token}"
 
