@@ -70,9 +70,7 @@ export default function Login() {
 
         <div className="relative z-10 h-full flex flex-col justify-between p-10 xl:p-14 text-white">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-white/95 flex items-center justify-center">
-              <WavygoLogo forceVariant="green" className="h-6 w-auto" />
-            </div>
+            <WavygoLogo forceVariant="white" className="h-9 w-auto" />
             <div>
               <div className="font-display text-[15px] font-semibold">WavyGo OS</div>
               <div className="text-[10px] uppercase tracking-[0.16em] text-white/60">Enterprise Operating System</div>
