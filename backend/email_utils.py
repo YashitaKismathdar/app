@@ -36,11 +36,15 @@ def send_invitation_email(
     headers = {
         "api-key": BREVO_API_KEY,
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "X-Mailin-Track": "0",
+        "X-Mailin-Click": "0"
     }
 
     desig_html = f"<div><strong>Designation:</strong> {designation}</div>" if designation else ""
     dept_html = f"<div><strong>Department:</strong> {department}</div>" if department else ""
+
+    text_content = f"Hello {recipient_name},\n\nYou have been invited by {invited_by} to join WavyGo OS as {role}.\n\nPlease click the link below to accept your invitation:\n{accept_url}\n\n© 2026 WavyGo OS"
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -98,7 +102,8 @@ def send_invitation_email(
         "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
         "to": [{"email": recipient_email, "name": recipient_name}],
         "subject": f"You're invited to join WavyGo OS as {role}",
-        "htmlContent": html_content
+        "htmlContent": html_content,
+        "textContent": text_content
     }
 
     try:
