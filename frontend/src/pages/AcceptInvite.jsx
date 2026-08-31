@@ -9,6 +9,15 @@ import { api, tokens, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, ShieldCheck, Lock, ArrowRight, UserCheck, AlertCircle, Eye, EyeOff } from "lucide-react";
 
+function getLoginUrl(email) {
+  const targetEmail = email ? encodeURIComponent(email) : "";
+  const query = targetEmail ? `?email=${targetEmail}` : "";
+  if (typeof window !== "undefined" && window.location.origin) {
+    return `${window.location.origin}/login${query}`;
+  }
+  return `https://app-eta-flax-97.vercel.app/login${query}`;
+}
+
 export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -38,9 +47,9 @@ export default function AcceptInvite() {
         if (data.already_accepted || data.status === "accepted") {
           tokens.clear();
           toast.info("Invitation already accepted! Redirecting to login page...");
-          const targetEmail = data.email ? encodeURIComponent(data.email) : "";
+          const targetEmail = data.email || "";
           setTimeout(() => {
-            window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
+            window.location.href = getLoginUrl(targetEmail);
           }, 600);
         }
       })
@@ -67,9 +76,9 @@ export default function AcceptInvite() {
       toast.success("Invitation accepted! Redirecting to login page...");
       setAccepted(true);
       tokens.clear();
-      const targetEmail = (data?.email || invite?.email) ? encodeURIComponent(data?.email || invite?.email) : "";
+      const targetEmail = data?.email || invite?.email || "";
       setTimeout(() => {
-        window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
+        window.location.href = getLoginUrl(targetEmail);
       }, 500);
     } catch (err) {
       toast.error(formatApiError(err));
@@ -105,7 +114,7 @@ export default function AcceptInvite() {
               <h2 className="font-semibold text-base">Invalid Invitation</h2>
             </div>
             <p className="text-sm text-slate-400 leading-relaxed">{error}</p>
-            <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white" onClick={() => { tokens.clear(); window.location.href = "/login"; }}>
+            <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white" onClick={() => { tokens.clear(); window.location.href = getLoginUrl(); }}>
               Go to Login
             </Button>
           </Card>
@@ -124,8 +133,7 @@ export default function AcceptInvite() {
               className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium h-11"
               onClick={() => {
                 tokens.clear();
-                const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
-                window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
+                window.location.href = getLoginUrl(invite?.email);
               }}
             >
               Sign In to Your Workspace <ArrowRight className="w-4 h-4 ml-2" />
