@@ -169,6 +169,9 @@ async def accept_invite(payload: dict):
                 "designation": inv.get("designation"),
                 "department": inv.get("department"),
                 "phone": inv.get("phone"),
+                "status": "active",
+                "is_active": True,
+                "active": True,
                 "updated_at": utc_iso()
             }}
         )
@@ -181,6 +184,9 @@ async def accept_invite(payload: dict):
             "department": inv.get("department"),
             "phone": inv.get("phone"),
             "password_hash": hash_password(password),
+            "status": "active",
+            "is_active": True,
+            "active": True,
             "online": False,
             "created_at": utc_iso(),
             "updated_at": utc_iso(),
@@ -310,6 +316,73 @@ async def update_employee(employee_id: str, payload: dict,
     doc = await db.users.find_one({"_id": oid(employee_id)}, {"password_hash": 0})
     await log_activity(db, current, "Updated employee", "Employees", target=doc["name"])
     return serialize(doc)
+
+
+@router.patch("/{employee_id}/status")
+async def toggle_employee_status(employee_id: str, payload: dict | None = None,
+                                 current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    db = get_db()
+    target = await db.users.find_one({"_id": oid(employee_id)})
+    if not target:
+        raise HTTPException(404, "Employee not found")
+    if target.get("role") == "Founder":
+        raise HTTPException(403, "Cannot deactivate the Founder account")
+    if target.get("role") == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can deactivate an Admin")
+    
+    current_status = target.get("status", "active")
+    req_status = (payload or {}).get("status")
+    if req_status in ("active", "deactivated"):
+        new_status = req_status
+    else:
+        new_status = "deactivated" if current_status == "active" else "active"
+    
+    is_act = (new_status == "active")
+    await db.users.update_one(
+        {"_id": oid(employee_id)},
+        {"$set": {
+            "status": new_status,
+            "is_active": is_act,
+            "active": is_act,
+            "updated_at": utc_iso()
+        }}
+    )
+    
+    if not is_act:
+        await db.sessions.delete_many({"user_id": str(target["_id"])})
+    
+    action_verb = "Reactivated" if is_act else "Deactivated"
+    await log_activity(db, current, f"{action_verb} employee account", "Employees", target=target["name"])
+    return {
+        "ok": True,
+        "status": new_status,
+        "is_active": is_act,
+        "message": f"Employee {target['name']} is now {new_status}."
+    }
+
+
+@router.delete("/{employee_id}")
+async def delete_employee(employee_id: str,
+                          current: UserPublic = Depends(require_roles("Founder", "Admin"))):
+    db = get_db()
+    target = await db.users.find_one({"_id": oid(employee_id)})
+    if not target:
+        raise HTTPException(404, "Employee not found")
+    if target.get("role") == "Founder":
+        raise HTTPException(403, "Cannot remove the Founder account")
+    if target.get("role") == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can remove an Admin")
+    
+    # Remove ONLY the user account credentials from db.users.
+    # Preserve all assigned tasks, submitted data, attendance, leave requests, activity logs!
+    await db.users.delete_one({"_id": oid(employee_id)})
+    await db.sessions.delete_many({"user_id": str(target["_id"])})
+    
+    await log_activity(db, current, "Removed employee account", "Employees", target=target["name"])
+    return {
+        "ok": True,
+        "message": f"Employee account for {target['name']} removed. Assigned tasks and submitted data remain intact."
+    }
 
 
 # -------- Departments --------

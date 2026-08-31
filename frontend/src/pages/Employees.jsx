@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check, Trash2, Pencil } from "lucide-react";
+import { Users, Plus, UserPlus, Building2, CalendarDays, Award, KeyRound, Mail, Copy, Check, Trash2, Pencil, Power, UserMinus, CheckCircle2 } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
@@ -28,10 +28,11 @@ function getInviteLink(token) {
 }
 
 function Directory() {
-  const { can } = usePermission();
+  const { can, role } = usePermission();
   const canInvite = can("employee.invite");
   const canEdit = can("employee.edit");
   const canReset = can("auth.reset_other_password");
+  const canManageAccount = role === "Founder" || role === "Admin";
   const [rows, setRows] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [q, setQ] = useState("");
@@ -110,6 +111,33 @@ function Directory() {
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
+  async function toggleEmployeeStatus(u) {
+    const isCurrentlyDeactivated = u.status === "deactivated" || u.is_active === false;
+    const actionText = isCurrentlyDeactivated ? "activate" : "deactivate";
+    if (!window.confirm(`Are you sure you want to ${actionText} ${u.name}? ${!isCurrentlyDeactivated ? "They will be unable to log in until reactivated." : ""}`)) return;
+
+    try {
+      const newStatus = isCurrentlyDeactivated ? "active" : "deactivated";
+      const { data } = await api.patch(`/employees/${u.id}/status`, { status: newStatus });
+      toast.success(data.message || `Employee ${u.name} status updated.`);
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  }
+
+  async function deleteEmployee(u) {
+    if (!window.confirm(`Are you sure you want to remove ${u.name}?\n\nNote: Only their login ID & password credentials will be removed. All assigned tasks, submitted data, and activity logs will remain intact.`)) return;
+
+    try {
+      const { data } = await api.delete(`/employees/${u.id}`);
+      toast.success(data.message || `Removed employee ${u.name}.`);
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  }
+
   function startEdit(u) {
     setEditingUser(u);
     setEditForm({
@@ -186,7 +214,7 @@ function Directory() {
                 <TableHead>Department</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
-                {(canEdit || canReset) && <TableHead className="text-right">Actions</TableHead>}
+                {(canEdit || canReset || canManageAccount) && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -202,8 +230,13 @@ function Directory() {
                   <TableCell className="text-[13px]">{u.designation || "—"}</TableCell>
                   <TableCell className="text-[13px]">{u.department || "—"}</TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">{u.phone || "—"}</TableCell>
-                  <TableCell><StatusPill status={u.online ? "active" : "paused"} /></TableCell>
-                  {(canEdit || canReset) && (
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <StatusPill status={u.status === "deactivated" || u.is_active === false ? "deactivated" : "active"} />
+                      {u.online && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Online now" />}
+                    </div>
+                  </TableCell>
+                  {(canEdit || canReset || canManageAccount) && (
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {canEdit && u.role !== "Founder" && (
@@ -215,6 +248,40 @@ function Directory() {
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetPassword(u)} data-testid={`reset-password-btn-${u.id}`}>
                             <KeyRound className="h-3.5 w-3.5 mr-1" /> Reset password
                           </Button>
+                        )}
+                        {canManageAccount && u.role !== "Founder" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`h-7 text-xs ${
+                                u.status === "deactivated" || u.is_active === false
+                                  ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                                  : "border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                              }`}
+                              onClick={() => toggleEmployeeStatus(u)}
+                              data-testid={`toggle-status-btn-${u.id}`}
+                            >
+                              {u.status === "deactivated" || u.is_active === false ? (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Activate
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-3.5 w-3.5 mr-1" /> Deactivate
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                              onClick={() => deleteEmployee(u)}
+                              data-testid={`delete-employee-btn-${u.id}`}
+                            >
+                              <UserMinus className="h-3.5 w-3.5 mr-1" /> Remove
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
