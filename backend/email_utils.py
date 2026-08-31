@@ -13,7 +13,7 @@ def _get_default_brevo_key() -> str:
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY") or _get_default_brevo_key()
 BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "garv.agarwal2409@gmail.com")
 BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "WavyGo OS")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://wavygo-foundation.preview.emergentagent.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://app-ghry92hw6-garv-agarwal24.vercel.app")
 
 
 def send_invitation_email(
