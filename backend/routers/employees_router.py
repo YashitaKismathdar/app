@@ -65,12 +65,50 @@ async def invite_employee(payload: EmployeeInviteIn,
         raise HTTPException(403, "Cannot create another Founder")
     if payload.role == "Admin" and current.role != "Founder":
         raise HTTPException(403, "Only the Founder can create an Admin")
-    if await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}):
-        raise HTTPException(409, "Email is already registered as an employee")
-    
+    existing_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+    if existing_user and existing_user.get("status") == "active" and (existing_user.get("is_active") is True or existing_user.get("active") is True):
+        raise HTTPException(409, "Email is already registered as an active employee")
+
     frontend_url = os.environ.get("FRONTEND_URL", "https://app-eta-flax-97.vercel.app")
     token = secrets.token_urlsafe(32)
     invite_url = f"{frontend_url}/accept-invite?token={token}"
+
+    if existing_user:
+        await db.users.update_one(
+            {"_id": existing_user["_id"]},
+            {"$set": {
+                "name": name,
+                "role": payload.role,
+                "designation": payload.designation,
+                "department": payload.department,
+                "phone": payload.phone,
+                "status": "deactivated",
+                "is_active": False,
+                "active": False,
+                "invited_by": current.name,
+                "updated_at": utc_iso()
+            }}
+        )
+        user_id = str(existing_user["_id"])
+    else:
+        user_doc = {
+            "email": email,
+            "name": name,
+            "role": payload.role,
+            "designation": payload.designation,
+            "department": payload.department,
+            "phone": payload.phone,
+            "password_hash": "",
+            "status": "deactivated",
+            "is_active": False,
+            "active": False,
+            "online": False,
+            "invited_by": current.name,
+            "created_at": utc_iso(),
+            "updated_at": utc_iso(),
+        }
+        res_u = await db.users.insert_one(user_doc)
+        user_id = str(res_u.inserted_id)
 
     inv_doc = {
         "token": token,
@@ -82,6 +120,7 @@ async def invite_employee(payload: EmployeeInviteIn,
         "phone": payload.phone,
         "status": "pending",
         "invited_by": current.name,
+        "user_id": user_id,
         "created_at": utc_iso(),
     }
     await db.invitations.delete_many({"email": email})
@@ -104,7 +143,8 @@ async def invite_employee(payload: EmployeeInviteIn,
         **serialize(inv_doc),
         "token": token,
         "invite_url": invite_url,
-        "message": f"Invitation email sent to {email}"
+        "user_id": user_id,
+        "message": f"Invitation email sent to {email}. Employee added to database as deactivated pending invitation accept."
     }
 
 
@@ -386,10 +426,13 @@ async def delete_employee(employee_id: str,
     if target.get("role") == "Admin" and current.role != "Founder":
         raise HTTPException(403, "Only the Founder can remove an Admin")
     
+    email = target.get("email")
     # Remove ONLY the user account credentials from db.users.
     # Preserve all assigned tasks, submitted data, attendance, leave requests, activity logs!
     await db.users.delete_one({"_id": target["_id"]})
     await db.sessions.delete_many({"user_id": str(target["_id"])})
+    if email:
+        await db.invitations.delete_many({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
     
     await log_activity(db, current, "Removed employee account", "Employees", target=target["name"])
     return {

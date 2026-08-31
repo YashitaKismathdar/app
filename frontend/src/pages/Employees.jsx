@@ -112,7 +112,7 @@ function Directory() {
   }
 
   async function toggleEmployeeStatus(u) {
-    const targetId = u.id || u._id;
+    const targetId = u.id || u._id || u.email;
     const isCurrentlyDeactivated = u.status === "deactivated" || u.is_active === false;
     const actionText = isCurrentlyDeactivated ? "activate" : "deactivate";
     if (!window.confirm(`Are you sure you want to ${actionText} ${u.name}? ${!isCurrentlyDeactivated ? "They will be unable to log in until reactivated." : ""}`)) return;
@@ -128,7 +128,7 @@ function Directory() {
   }
 
   async function deleteEmployee(u) {
-    const targetId = u.id || u._id;
+    const targetId = u.id || u._id || u.email;
     if (!window.confirm(`Are you sure you want to remove ${u.name}?\n\nNote: Only their login ID & password credentials will be removed. All assigned tasks, submitted data, and activity logs will remain intact.`)) return;
 
     try {
