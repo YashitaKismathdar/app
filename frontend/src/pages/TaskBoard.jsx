@@ -380,7 +380,9 @@ export default function TaskBoard() {
               <div className="divide-y divide-border">
                 {filtered.map(t => (
                   <div key={t.id} onClick={() => openDetail(t)} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/40 cursor-pointer">
-                    <StatusPill status={t.status} />
+                    <div className="w-[110px] flex shrink-0">
+                      <StatusPill status={t.status} />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-[13.5px] font-medium truncate flex items-center gap-2">
                         <span>{t.title}</span>
@@ -392,8 +394,14 @@ export default function TaskBoard() {
                       </div>
                       <div className="text-[11.5px] text-muted-foreground">{t.module} · {t.assignee_name || "Unassigned"}</div>
                     </div>
-                    <StatusPill status={t.priority} />
-                    {t.due_date && <div className="text-[12px] text-muted-foreground hidden sm:block">{new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>}
+                    <div className="w-[85px] flex justify-end shrink-0">
+                      <StatusPill status={t.priority} />
+                    </div>
+                    <div className="text-[12px] text-muted-foreground hidden sm:block w-[60px] text-right shrink-0">
+                      {t.due_date 
+                        ? new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                        : "---"}
+                    </div>
                   </div>
                 ))}
               </div>
