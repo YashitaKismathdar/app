@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { api, formatApiError } from "@/lib/api";
+import { api, tokens, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, ShieldCheck, Lock, ArrowRight, UserCheck, AlertCircle, Eye, EyeOff } from "lucide-react";
 
@@ -58,10 +58,11 @@ export default function AcceptInvite() {
       await api.post("/employees/accept-invite", { token, password });
       toast.success("Invitation accepted! Redirecting to login page...");
       setAccepted(true);
+      tokens.clear(); // Clear existing session tokens so Login page always appears
       setTimeout(() => {
         const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
-        navigate(`/login${targetEmail ? `?email=${targetEmail}` : ""}`);
-      }, 1500);
+        window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
+      }, 1000);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -96,7 +97,7 @@ export default function AcceptInvite() {
               <h2 className="font-semibold text-base">Invalid Invitation</h2>
             </div>
             <p className="text-sm text-slate-400 leading-relaxed">{error}</p>
-            <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white" onClick={() => navigate("/login")}>
+            <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white" onClick={() => { tokens.clear(); window.location.href = "/login"; }}>
               Go to Login
             </Button>
           </Card>
@@ -114,8 +115,9 @@ export default function AcceptInvite() {
             <Button
               className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium h-11"
               onClick={() => {
+                tokens.clear();
                 const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
-                navigate(`/login${targetEmail ? `?email=${targetEmail}` : ""}`);
+                window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
               }}
             >
               Sign In to Your Workspace <ArrowRight className="w-4 h-4 ml-2" />
