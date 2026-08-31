@@ -69,7 +69,7 @@ async def invite_employee(payload: EmployeeInviteIn,
         raise HTTPException(409, "Email is already registered as an employee")
     
     env_frontend = os.environ.get("FRONTEND_URL", "")
-    if not env_frontend or "emergentagent.com" in env_frontend or "preview" in env_frontend:
+    if not env_frontend or "emergentagent.com" in env_frontend or "preview" in env_frontend or "wavygo-foundation" in env_frontend:
         frontend_url = "https://app-eta-flax-97.vercel.app"
     else:
         frontend_url = env_frontend.rstrip("/")
