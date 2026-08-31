@@ -112,13 +112,14 @@ function Directory() {
   }
 
   async function toggleEmployeeStatus(u) {
+    const targetId = u.id || u._id;
     const isCurrentlyDeactivated = u.status === "deactivated" || u.is_active === false;
     const actionText = isCurrentlyDeactivated ? "activate" : "deactivate";
     if (!window.confirm(`Are you sure you want to ${actionText} ${u.name}? ${!isCurrentlyDeactivated ? "They will be unable to log in until reactivated." : ""}`)) return;
 
     try {
       const newStatus = isCurrentlyDeactivated ? "active" : "deactivated";
-      const { data } = await api.patch(`/employees/${u.id}/status`, { status: newStatus });
+      const { data } = await api.patch(`/employees/${targetId}/status`, { status: newStatus });
       toast.success(data.message || `Employee ${u.name} status updated.`);
       load();
     } catch (e) {
@@ -127,10 +128,11 @@ function Directory() {
   }
 
   async function deleteEmployee(u) {
+    const targetId = u.id || u._id;
     if (!window.confirm(`Are you sure you want to remove ${u.name}?\n\nNote: Only their login ID & password credentials will be removed. All assigned tasks, submitted data, and activity logs will remain intact.`)) return;
 
     try {
-      const { data } = await api.delete(`/employees/${u.id}`);
+      const { data } = await api.delete(`/employees/${targetId}`);
       toast.success(data.message || `Removed employee ${u.name}.`);
       load();
     } catch (e) {

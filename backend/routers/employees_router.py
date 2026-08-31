@@ -273,18 +273,31 @@ async def delete_invitation(invite_id: str, current: UserPublic = Depends(requir
     return {"ok": True, "message": f"Pending invitation for {email} deleted successfully"}
 
 
+async def _find_user(db, employee_id: str):
+    employee_id_str = str(employee_id).strip()
+    if ObjectId.is_valid(employee_id_str):
+        user = await db.users.find_one({"_id": ObjectId(employee_id_str)})
+        if user:
+            return user
+    user = await db.users.find_one({"_id": employee_id_str})
+    if user:
+        return user
+    user = await db.users.find_one({"email": {"$regex": f"^{re.escape(employee_id_str)}$", "$options": "i"}})
+    return user
+
+
 @router.post("/{employee_id}/reset-password")
 async def reset_employee_password(employee_id: str, payload: dict | None = None,
                                   current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
-    target = await db.users.find_one({"_id": oid(employee_id)})
+    target = await _find_user(db, employee_id)
     if not target:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, "Employee not found")
     if target.get("role") == "Founder":
         raise HTTPException(403, "Cannot reset the Founder password from here")
     new_password = (payload or {}).get("new_password") or _gen_temp_password()
     await db.users.update_one(
-        {"_id": oid(employee_id)},
+        {"_id": target["_id"]},
         {"$set": {"password_hash": hash_password(new_password), "updated_at": utc_iso()}},
     )
     await log_activity(db, current, "Reset password", "Employees", target=target["name"])
@@ -294,35 +307,11 @@ async def reset_employee_password(employee_id: str, payload: dict | None = None,
     return {"ok": True, "temp_password": new_password}
 
 
-@router.patch("/{employee_id}")
-async def update_employee(employee_id: str, payload: dict,
-                          current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
-    db = get_db()
-    new_role = payload.get("role")
-    if new_role == "Founder":
-        raise HTTPException(403, "Cannot assign the Founder role")
-    if new_role == "Admin" and current.role != "Founder":
-        raise HTTPException(403, "Only the Founder can assign the Admin role")
-    target = await db.users.find_one({"_id": oid(employee_id)})
-    if not target:
-        raise HTTPException(404, "Not found")
-    if current.role == "Manager" and target.get("department") != current.department:
-        raise HTTPException(403, "Managers can only edit teammates in their department")
-    payload.pop("id", None); payload.pop("_id", None); payload.pop("password_hash", None); payload.pop("email", None)
-    payload["updated_at"] = utc_iso()
-    res = await db.users.update_one({"_id": oid(employee_id)}, {"$set": payload})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Not found")
-    doc = await db.users.find_one({"_id": oid(employee_id)}, {"password_hash": 0})
-    await log_activity(db, current, "Updated employee", "Employees", target=doc["name"])
-    return serialize(doc)
-
-
 @router.patch("/{employee_id}/status")
 async def toggle_employee_status(employee_id: str, payload: dict | None = None,
                                  current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
-    target = await db.users.find_one({"_id": oid(employee_id)})
+    target = await _find_user(db, employee_id)
     if not target:
         raise HTTPException(404, "Employee not found")
     if target.get("role") == "Founder":
@@ -339,7 +328,7 @@ async def toggle_employee_status(employee_id: str, payload: dict | None = None,
     
     is_act = (new_status == "active")
     await db.users.update_one(
-        {"_id": oid(employee_id)},
+        {"_id": target["_id"]},
         {"$set": {
             "status": new_status,
             "is_active": is_act,
@@ -361,11 +350,35 @@ async def toggle_employee_status(employee_id: str, payload: dict | None = None,
     }
 
 
+@router.patch("/{employee_id}")
+async def update_employee(employee_id: str, payload: dict,
+                          current: UserPublic = Depends(require_roles("Founder", "Admin", "Manager"))):
+    db = get_db()
+    new_role = payload.get("role")
+    if new_role == "Founder":
+        raise HTTPException(403, "Cannot assign the Founder role")
+    if new_role == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can assign the Admin role")
+    target = await _find_user(db, employee_id)
+    if not target:
+        raise HTTPException(404, "Employee not found")
+    if current.role == "Manager" and target.get("department") != current.department:
+        raise HTTPException(403, "Managers can only edit teammates in their department")
+    payload.pop("id", None); payload.pop("_id", None); payload.pop("password_hash", None); payload.pop("email", None)
+    payload["updated_at"] = utc_iso()
+    res = await db.users.update_one({"_id": target["_id"]}, {"$set": payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Employee not found")
+    doc = await db.users.find_one({"_id": target["_id"]}, {"password_hash": 0})
+    await log_activity(db, current, "Updated employee", "Employees", target=doc["name"])
+    return serialize(doc)
+
+
 @router.delete("/{employee_id}")
 async def delete_employee(employee_id: str,
                           current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
-    target = await db.users.find_one({"_id": oid(employee_id)})
+    target = await _find_user(db, employee_id)
     if not target:
         raise HTTPException(404, "Employee not found")
     if target.get("role") == "Founder":
@@ -375,7 +388,7 @@ async def delete_employee(employee_id: str,
     
     # Remove ONLY the user account credentials from db.users.
     # Preserve all assigned tasks, submitted data, attendance, leave requests, activity logs!
-    await db.users.delete_one({"_id": oid(employee_id)})
+    await db.users.delete_one({"_id": target["_id"]})
     await db.sessions.delete_many({"user_id": str(target["_id"])})
     
     await log_activity(db, current, "Removed employee account", "Employees", target=target["name"])
