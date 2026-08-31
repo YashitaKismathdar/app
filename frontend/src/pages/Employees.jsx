@@ -81,16 +81,18 @@ function Directory() {
   }
 
   async function resendInvite(inv) {
+    const targetId = inv.id || inv._id || inv.token;
     try {
-      const { data } = await api.post(`/employees/invitations/${inv.id}/resend`);
+      const { data } = await api.post(`/employees/invitations/${targetId}/resend`);
       toast.success(data.message || `Invitation email resent to ${inv.email}`);
     } catch (e) { toast.error(formatApiError(e)); }
   }
 
   async function deleteInvite(inv) {
     if (!window.confirm(`Are you sure you want to delete the pending invitation for ${inv.email}?`)) return;
+    const targetId = inv.id || inv._id || inv.token;
     try {
-      const { data } = await api.delete(`/employees/invitations/${inv.id}`);
+      const { data } = await api.delete(`/employees/invitations/${targetId}`);
       toast.success(data.message || "Pending invitation deleted");
       load();
     } catch (e) { toast.error(formatApiError(e)); }

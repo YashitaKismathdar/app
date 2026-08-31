@@ -201,7 +201,11 @@ async def accept_invite(payload: dict):
 @router.post("/invitations/{invite_id}/resend")
 async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
-    inv = await db.invitations.find_one({"_id": oid(invite_id), "status": "pending"})
+    query = [{"token": invite_id}, {"_id": invite_id}]
+    if ObjectId.is_valid(invite_id):
+        query.append({"_id": ObjectId(invite_id)})
+
+    inv = await db.invitations.find_one({"$or": query, "status": "pending"})
     if not inv:
         raise HTTPException(404, "Pending invitation not found")
     
@@ -221,15 +225,16 @@ async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, c
 @router.delete("/invitations/{invite_id}", status_code=200)
 async def delete_invitation(invite_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
-    inv = await db.invitations.find_one({"_id": oid(invite_id)})
+    query = [{"token": invite_id}, {"_id": invite_id}]
+    if ObjectId.is_valid(invite_id):
+        query.append({"_id": ObjectId(invite_id)})
+
+    inv = await db.invitations.find_one({"$or": query})
     if not inv:
         raise HTTPException(404, "Pending invitation not found")
     
     email = inv.get("email", "").lower().strip()
     await db.invitations.delete_one({"_id": inv["_id"]})
-    if email:
-        await db.users.delete_many({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
-        
     await log_activity(db, current, "Deleted pending invitation", "Employees", target=email)
     return {"ok": True, "message": f"Pending invitation for {email} deleted successfully"}
 
