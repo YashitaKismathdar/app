@@ -35,6 +35,14 @@ export default function AcceptInvite() {
       .then(({ data }) => {
         setInvite(data);
         setLoading(false);
+        if (data.already_accepted || data.status === "accepted") {
+          tokens.clear();
+          toast.info("Invitation already accepted! Redirecting to login page...");
+          const targetEmail = data.email ? encodeURIComponent(data.email) : "";
+          setTimeout(() => {
+            window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
+          }, 600);
+        }
       })
       .catch((e) => {
         setError(formatApiError(e) || "Invalid or expired invitation link.");
@@ -55,14 +63,14 @@ export default function AcceptInvite() {
 
     setSubmitting(true);
     try {
-      await api.post("/employees/accept-invite", { token, password });
+      const { data } = await api.post("/employees/accept-invite", { token, password });
       toast.success("Invitation accepted! Redirecting to login page...");
       setAccepted(true);
-      tokens.clear(); // Clear existing session tokens so Login page always appears
+      tokens.clear();
+      const targetEmail = (data?.email || invite?.email) ? encodeURIComponent(data?.email || invite?.email) : "";
       setTimeout(() => {
-        const targetEmail = invite?.email ? encodeURIComponent(invite.email) : "";
         window.location.href = `/login${targetEmail ? `?email=${targetEmail}` : ""}`;
-      }, 1000);
+      }, 500);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

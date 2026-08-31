@@ -118,7 +118,7 @@ async def list_invitations(current: UserPublic = Depends(require_roles("Founder"
 @router.get("/invite/{token}")
 async def get_invite_details(token: str):
     db = get_db()
-    inv = await db.invitations.find_one({"token": token, "status": "pending"})
+    inv = await db.invitations.find_one({"token": token})
     if not inv:
         raise HTTPException(404, "Invalid or expired invitation link")
     return {
@@ -129,7 +129,8 @@ async def get_invite_details(token: str):
         "department": inv.get("department"),
         "phone": inv.get("phone"),
         "invited_by": inv.get("invited_by"),
-        "status": inv["status"],
+        "status": inv.get("status", "pending"),
+        "already_accepted": inv.get("status") == "accepted",
     }
 
 
@@ -137,17 +138,26 @@ async def get_invite_details(token: str):
 async def accept_invite(payload: dict):
     token = payload.get("token")
     password = payload.get("password")
-    if not token or not password:
-        raise HTTPException(400, "Token and password are required")
-    if len(password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters long")
+    if not token:
+        raise HTTPException(400, "Invitation token is required")
     
     db = get_db()
-    inv = await db.invitations.find_one({"token": token, "status": "pending"})
+    inv = await db.invitations.find_one({"token": token})
     if not inv:
         raise HTTPException(404, "Invalid or expired invitation link")
     
     email = inv["email"].lower().strip()
+    if inv.get("status") == "accepted":
+        return {
+            "ok": True,
+            "email": email,
+            "already_accepted": True,
+            "message": "Invitation already accepted! Redirecting to login page..."
+        }
+
+    if not password or len(password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters long")
+    
     existing_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
     if existing_user:
         await db.users.update_one(
@@ -185,7 +195,7 @@ async def accept_invite(payload: dict):
     await notify(db, None, "New teammate joined", f"{inv['name']} accepted the invitation and joined as {inv['role']}.",
                  kind="success", link="/employees")
     
-    return {"ok": True, "email": email, "message": "Invitation accepted successfully! You can now log in."}
+    return {"ok": True, "email": email, "message": "Invitation accepted successfully! Redirecting to login page..."}
 
 
 @router.post("/invitations/{invite_id}/resend")
