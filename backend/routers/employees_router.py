@@ -205,15 +205,24 @@ async def accept_invite(payload: dict):
 @router.post("/invitations/{invite_id}/resend")
 async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
+    invite_id_str = str(invite_id).strip()
     inv = None
-    if ObjectId.is_valid(invite_id):
-        inv = await db.invitations.find_one({"_id": ObjectId(invite_id)})
+
+    if ObjectId.is_valid(invite_id_str):
+        inv = await db.invitations.find_one({"_id": ObjectId(invite_id_str)})
     if not inv:
-        inv = await db.invitations.find_one({"_id": invite_id})
+        inv = await db.invitations.find_one({"_id": invite_id_str})
     if not inv:
-        inv = await db.invitations.find_one({"token": invite_id})
+        inv = await db.invitations.find_one({"token": invite_id_str})
     if not inv:
-        inv = await db.invitations.find_one({"email": {"$regex": f"^{re.escape(invite_id)}$", "$options": "i"}})
+        inv = await db.invitations.find_one({"email": invite_id_str})
+    if not inv:
+        inv = await db.invitations.find_one({"email": {"$regex": f"^{re.escape(invite_id_str)}$", "$options": "i"}})
+    if not inv:
+        async for doc in db.invitations.find():
+            if str(doc.get("_id")) == invite_id_str or str(doc.get("id")) == invite_id_str or doc.get("token") == invite_id_str or doc.get("email") == invite_id_str:
+                inv = doc
+                break
 
     if not inv:
         raise HTTPException(404, "Pending invitation not found")
@@ -234,15 +243,24 @@ async def resend_invitation(invite_id: str, background_tasks: BackgroundTasks, c
 @router.delete("/invitations/{invite_id}", status_code=200)
 async def delete_invitation(invite_id: str, current: UserPublic = Depends(require_roles("Founder", "Admin"))):
     db = get_db()
+    invite_id_str = str(invite_id).strip()
     inv = None
-    if ObjectId.is_valid(invite_id):
-        inv = await db.invitations.find_one({"_id": ObjectId(invite_id)})
+
+    if ObjectId.is_valid(invite_id_str):
+        inv = await db.invitations.find_one({"_id": ObjectId(invite_id_str)})
     if not inv:
-        inv = await db.invitations.find_one({"_id": invite_id})
+        inv = await db.invitations.find_one({"_id": invite_id_str})
     if not inv:
-        inv = await db.invitations.find_one({"token": invite_id})
+        inv = await db.invitations.find_one({"token": invite_id_str})
     if not inv:
-        inv = await db.invitations.find_one({"email": {"$regex": f"^{re.escape(invite_id)}$", "$options": "i"}})
+        inv = await db.invitations.find_one({"email": invite_id_str})
+    if not inv:
+        inv = await db.invitations.find_one({"email": {"$regex": f"^{re.escape(invite_id_str)}$", "$options": "i"}})
+    if not inv:
+        async for doc in db.invitations.find():
+            if str(doc.get("_id")) == invite_id_str or str(doc.get("id")) == invite_id_str or doc.get("token") == invite_id_str or doc.get("email") == invite_id_str:
+                inv = doc
+                break
 
     if not inv:
         raise HTTPException(404, "Pending invitation not found")
