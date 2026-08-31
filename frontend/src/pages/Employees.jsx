@@ -21,6 +21,13 @@ function initials(name) {
   return (name || "?").split(" ").map(s => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
+function getInviteLink(token) {
+  if (!token) return "";
+  const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://app-eta-flax-97.vercel.app";
+  const base = origin.includes("emergentagent.com") || origin.includes("localhost") ? "https://app-eta-flax-97.vercel.app" : origin;
+  return `${base}/accept-invite?token=${token}`;
+}
+
 function Directory() {
   const { can } = usePermission();
   const canInvite = can("employee.invite");
@@ -38,13 +45,11 @@ function Directory() {
   const [createdInvite, setCreatedInvite] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  async function load() {
-    const { data } = await api.get("/employees");
-    setRows(data);
-    if (canInvite) {
-      api.get("/employees/invitations").then(({ data: invs }) => setInvitations(invs)).catch(() => {});
-    }
-  }
+  const load = () => {
+    api.get("/employees").then(({ data }) => setRows(data)).catch(() => {});
+    api.get("/employees/invitations").then(({ data }) => setInvitations(data)).catch(() => {});
+  };
+
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -66,7 +71,7 @@ function Directory() {
     }
     try {
       const { data } = await api.post("/employees/invite", form);
-      const url = data.invite_url || `${window.location.origin}/accept-invite?token=${data.token}`;
+      const url = getInviteLink(data.token);
       setCreatedInvite({ ...data, invite_url: url });
       toast.success(data.message || `Invitation email sent to ${form.email}`);
       load();
@@ -144,9 +149,9 @@ function Directory() {
           <CardContent className="pt-0">
             <div className="divide-y divide-amber-500/10">
               {pendingInvs.map(inv => {
-                const link = inv.invite_url || `${window.location.origin}/accept-invite?token=${inv.token}`;
+                const link = getInviteLink(inv.token);
                 return (
-                  <div key={inv.id} className="py-2.5 flex items-center justify-between gap-4 text-xs">
+                  <div key={inv.id || inv._id || inv.token} className="py-2.5 flex items-center justify-between gap-4 text-xs">
                     <div>
                       <span className="font-medium text-foreground">{inv.name}</span>
                       <span className="text-muted-foreground ml-2">({inv.email})</span>
