@@ -13,13 +13,7 @@ def _get_default_brevo_key() -> str:
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY") or _get_default_brevo_key()
 BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "garv.agarwal2409@gmail.com")
 BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "WavyGo OS")
-def _get_frontend_url() -> str:
-    env = os.environ.get("FRONTEND_URL", "")
-    if not env or "emergentagent.com" in env or "preview" in env or "wavygo-foundation" in env:
-        return "https://app-eta-flax-97.vercel.app"
-    return env.rstrip("/")
-
-FRONTEND_URL = _get_frontend_url()
+FRONTEND_URL = "https://app-eta-flax-97.vercel.app"
 
 
 def send_invitation_email(
@@ -37,8 +31,7 @@ def send_invitation_email(
         print("[Email] Warning: BREVO_API_KEY not configured")
         return False
 
-    frontend_base = _get_frontend_url()
-    accept_url = accept_url_override or f"{frontend_base}/accept-invite?token={token}"
+    accept_url = accept_url_override or f"https://app-eta-flax-97.vercel.app/accept-invite?token={token}"
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
         "api-key": BREVO_API_KEY,
