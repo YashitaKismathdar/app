@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/module/ModulePrimitives";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -51,7 +52,22 @@ function Directory() {
     api.get("/employees/invitations").then(({ data }) => setInvitations(data)).catch(() => {});
   };
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (searchParams.get("create") === "invite" || searchParams.get("action") === "invite-teammate") {
+      setCreatedInvite(null);
+      setForm({ email: "", name: "", role: "Employee", designation: "", department: "", phone: "" });
+      setOpen(true);
+      setSearchParams(params => {
+        params.delete("create");
+        params.delete("action");
+        return params;
+      }, { replace: true });
+    }
+  }, [searchParams]);
 
   const filtered = useMemo(() => {
     if (!q) return rows;
