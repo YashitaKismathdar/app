@@ -141,16 +141,22 @@ async def invite_employee(
     doc["_id"] = res.inserted_id
 
     await log_activity(
-        db,
-        current,
-        "Invited employee",
-        "Employees",
-        target=payload.name,
-    )
+    db,
+    current,
+    "Invited employee",
+    "Employees",
+    target=payload.name,
+)
 
+managers = await db.users.find(
+    {"role": {"$in": ["Founder", "Admin"]}},
+    {"_id": 1},
+).to_list(50)
+
+for m in managers:
     await notify(
         db,
-        None,
+        str(m["_id"]),
         "New teammate joined",
         f"{payload.name} was invited by {current.name} as {payload.role}.",
         kind="success",
@@ -775,9 +781,26 @@ async def create_leave(
         ),
     )
 
+    await log_activity(
+    db,
+    current,
+    "Leave requested",
+    "Employees",
+    target=(
+        f"{emp['name'] if emp else '—'} · "
+        f"{doc['from_date']} → {doc['to_date']}"
+    ),
+)
+
+approvers = await db.users.find(
+    {"role": {"$in": ["Founder", "Admin", "Manager"]}},
+    {"_id": 1},
+).to_list(50)
+
+for a in approvers:
     await notify(
         db,
-        None,
+        str(a["_id"]),
         "Leave request",
         (
             f"{emp['name'] if emp else 'Employee'} "
@@ -787,7 +810,6 @@ async def create_leave(
         kind="warning",
         link="/employees",
     )
-
     return serialize(doc)
 
 
