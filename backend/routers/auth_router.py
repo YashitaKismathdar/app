@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from bson import ObjectId
 
@@ -24,6 +25,8 @@ def _to_public(doc) -> UserPublic:
         phone=doc.get("phone"),
         designation=doc.get("designation"),
         department=doc.get("department"),
+        status=doc.get("status", "active"),
+        is_active=doc.get("is_active", True),
     )
 
 
@@ -43,9 +46,12 @@ async def _log_activity(db, user, action: str, module: str = "Auth", target: str
 async def login(payload: LoginRequest, request: Request):
     db = get_db()
     email = payload.email.lower().strip()
-    user = await db.users.find_one({"email": email})
+    user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user.get("status") == "deactivated" or user.get("is_active") is False or user.get("active") is False:
+        raise HTTPException(status_code=403, detail="Your account has been deactivated. Please contact your Founder or Admin to reactivate your access.")
 
     await db.users.update_one({"_id": user["_id"]}, {"$set": {"online": True, "last_login_at": utc_now().isoformat()}})
 
