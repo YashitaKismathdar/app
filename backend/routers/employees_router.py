@@ -21,6 +21,7 @@ from models import UserPublic
 from models_part2 import DepartmentIn, EmployeeInviteIn, AttendanceIn, LeaveIn, PerformanceIn
 from hub_utils import serialize, serialize_many, oid, utc_iso, log_activity, notify
 from email_utils import send_invitation_email, send_password_reset_email
+from dept_groups import sync_employee_department_group, add_member_to_department_channel, get_or_create_department_channel
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -187,85 +188,83 @@ async def invite_employee(
         )
 
     if payload.role == "Founder":
-        raise HTTPException(
-            403,
-            "Cannot create another Founder",
+        raise HTTPException(403, "Cannot create another Founder")
+    if payload.role == "Admin" and current.role != "Founder":
+        raise HTTPException(403, "Only the Founder can create an Admin")
+    existing_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+    if existing_user and existing_user.get("status") == "active" and (existing_user.get("is_active") is True or existing_user.get("active") is True):
+        raise HTTPException(409, "Email is already registered as an active employee")
+
+    frontend_url = os.environ.get("FRONTEND_URL", "https://app-eta-flax-97.vercel.app")
+    token = secrets.token_urlsafe(32)
+    invite_url = f"{frontend_url}/accept-invite?token={token}"
+
+    if existing_user:
+        await db.users.update_one(
+            {"_id": existing_user["_id"]},
+            {"$set": {
+                "name": name,
+                "role": payload.role,
+                "designation": payload.designation,
+                "department": payload.department,
+                "phone": payload.phone,
+                "status": "deactivated",
+                "is_active": False,
+                "active": False,
+                "invited_by": current.name,
+                "updated_at": utc_iso()
+            }}
         )
+        user_id = str(existing_user["_id"])
+    else:
+        user_doc = {
+            "email": email,
+            "name": name,
+            "role": payload.role,
+            "designation": payload.designation,
+            "department": payload.department,
+            "phone": payload.phone,
+            "password_hash": "",
+            "status": "deactivated",
+            "is_active": False,
+            "active": False,
+            "online": False,
+            "invited_by": current.name,
+            "created_at": utc_iso(),
+            "updated_at": utc_iso(),
+        }
+        res_u = await db.users.insert_one(user_doc)
+        user_id = str(res_u.inserted_id)
 
-    if (
-        payload.role == "Admin"
-        and current.role != "Founder"
-    ):
-        raise HTTPException(
-            403,
-            "Only the Founder can create an Admin",
-        )
-
-    # Prevent duplicate accounts.
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(
-            409,
-            "Email already exists",
-        )
-
-    default_pw = "Wavygo@2026"
-
-    doc = {
+    inv_doc = {
+        "token": token,
         "email": email,
         "name": name,
         "role": payload.role,
         "designation": payload.designation,
         "department": payload.department,
         "phone": payload.phone,
-        "password_hash": hash_password(default_pw),
-        "online": False,
-        "status": "active",
-        "is_active": True,
-        "active": True,
+        "status": "pending",
+        "invited_by": current.name,
+        "user_id": user_id,
         "created_at": utc_iso(),
-        "updated_at": utc_iso(),
     }
+    await db.invitations.delete_many({"email": email})
+    res = await db.invitations.insert_one(inv_doc)
+    inv_doc["_id"] = res.inserted_id
 
-    res = await db.users.insert_one(doc)
-
-    doc["_id"] = res.inserted_id
-
-    await log_activity(
-        db,
-        current,
-        "Invited employee",
-        "Employees",
-        target=name,
+    background_tasks.add_task(
+        send_invitation_email,
+        recipient_email=email,
+        recipient_name=name,
+        role=payload.role,
+        token=token,
+        invited_by=current.name,
+        designation=payload.designation,
+        department=payload.department
     )
 
-    # Notify Founder/Admin users.
-    managers = await db.users.find(
-        {
-            "role": {
-                "$in": [
-                    "Founder",
-                    "Admin",
-                ]
-            }
-        },
-        {
-            "_id": 1,
-        },
-    ).to_list(50)
-
-    for manager in managers:
-        await notify(
-            db,
-            str(manager["_id"]),
-            "New teammate joined",
-            (
-                f"{name} was invited by "
-                f"{current.name} as {payload.role}."
-            ),
-            kind="success",
-            link="/employees",
-        )
-
+    await log_activity(db, current, "Sent employee invitation", "Employees", target=name)
     return {
         **serialize(doc),
         "message": (
@@ -437,17 +436,15 @@ async def accept_invite(payload: dict):
         },
     )
 
-    await notify(
-        db,
-        None,
-        "New teammate joined",
-        (
-            f"{inv['name']} accepted the invitation "
-            f"and joined as {inv['role']}."
-        ),
-        kind="success",
-        link="/employees",
-    )
+    if inv.get("department"):
+        joined_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+        if joined_user:
+            await add_member_to_department_channel(db, str(joined_user["_id"]), inv["department"])
+
+    await notify(db, None, "New teammate joined", f"{inv['name']} accepted the invitation and joined as {inv['role']}.",
+                 kind="success", link="/employees")
+    
+    return {"ok": True, "email": email, "message": "Invitation accepted successfully! Redirecting to login page..."}
 
     return {
         "ok": True,
@@ -901,26 +898,11 @@ async def update_employee(
     )
 
     if not target:
-        raise HTTPException(
-            404,
-            "Employee not found",
-        )
-
-    if (
-        current.role == "Manager"
-        and target.get("department")
-        != current.department
-    ):
-        raise HTTPException(
-            403,
-            "Managers can only edit teammates in their department",
-        )
-
-    payload.pop("id", None)
-    payload.pop("_id", None)
-    payload.pop("password_hash", None)
-    payload.pop("email", None)
-
+        raise HTTPException(404, "Employee not found")
+    old_department = target.get("department")
+    if current.role == "Manager" and target.get("department") != current.department:
+        raise HTTPException(403, "Managers can only edit teammates in their department")
+    payload.pop("id", None); payload.pop("_id", None); payload.pop("password_hash", None); payload.pop("email", None)
     payload["updated_at"] = utc_iso()
 
     res = await db.users.update_one(
@@ -929,24 +911,11 @@ async def update_employee(
     )
 
     if res.matched_count == 0:
-        raise HTTPException(
-            404,
-            "Employee not found",
-        )
-
-    doc = await db.users.find_one(
-        {"_id": target["_id"]},
-        {"password_hash": 0},
-    )
-
-    await log_activity(
-        db,
-        current,
-        "Updated employee",
-        "Employees",
-        target=doc["name"],
-    )
-
+        raise HTTPException(404, "Employee not found")
+    doc = await db.users.find_one({"_id": target["_id"]}, {"password_hash": 0})
+    if "department" in payload:
+        await sync_employee_department_group(db, str(target["_id"]), old_department, payload.get("department"))
+    await log_activity(db, current, "Updated employee", "Employees", target=doc["name"])
     return serialize(doc)
 
 
@@ -1121,15 +1090,8 @@ async def create_department(
     )
 
     doc["_id"] = res.inserted_id
-
-    await log_activity(
-        db,
-        current,
-        "Created department",
-        "Employees",
-        target=doc["name"],
-    )
-
+    await get_or_create_department_channel(db, doc["name"])
+    await log_activity(db, current, "Created department", "Employees", target=doc["name"])
     return serialize(doc)
 
 
@@ -1430,18 +1392,14 @@ async def create_leave(
         {"_id": 1},
     ).to_list(50)
 
-for a in approvers:
-    await notify(
-        db,
-        current,
-        f"Leave {status}",
-        "Employees",
-        target=(
-            emp["name"]
-            if emp
-            else None
-        ),
-    )
+    for a in approvers:
+        await notify(
+            db, str(a["_id"]), "Leave request",
+            f"{emp['name'] if emp else 'Employee'} requested {doc['kind']} leave from {doc['from_date']} to {doc['to_date']}.",
+            kind="warning", link="/employees",
+        )
+    return serialize(doc)
+
 
     if emp and doc.get("employee_id"):
         await notify(
